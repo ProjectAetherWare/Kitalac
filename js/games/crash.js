@@ -4,239 +4,263 @@
     class CrashGame {
         constructor(containerId) {
             this.container = document.getElementById(containerId);
-            this.canvas = document.createElement('canvas');
-            this.ctx = this.canvas.getContext('2d');
+            this.canvas = null;
+            this.ctx = null;
             this.width = 800;
             this.height = 500;
-            this.canvas.width = this.width;
-            this.canvas.height = this.height;
-            this.canvas.style.width = '100%';
-            this.canvas.style.height = '100%';
-            this.canvas.style.background = '#151921';
-            this.canvas.style.borderRadius = '12px';
-
-            this.multiplier = 1.00;
-            this.running = false;
-            this.crashed = false;
-            this.betAmount = 0;
             
+            // Game State
+            this.state = 'IDLE'; // IDLE, RUNNING, CRASHED, CASHED_OUT
+            this.multiplier = 1.00;
+            this.crashPoint = 0;
+            this.betAmount = 0;
+            this.autoCashOut = 0;
+            this.startTime = 0;
+            this.rafId = null;
+            
+            // Visuals
+            this.accentColor = '#00ff88'; // Default green
+            
+            this.callbacks = {
+                onTick: null,
+                onCrash: null,
+                onWin: null
+            };
+
             this.setupUI();
         }
 
         destroy() {
-            this.running = false;
-            if (this.rafId) cancelAnimationFrame(this.rafId);
+            this.stop();
             this.container.innerHTML = '';
         }
     
         setupUI() {
-            this.container.innerHTML = '';
-            
-            const gameWrapper = document.createElement('div');
-            gameWrapper.style.position = 'relative';
-            gameWrapper.style.width = '100%';
-            gameWrapper.style.maxWidth = '800px';
-            gameWrapper.style.margin = '0 auto';
-            gameWrapper.appendChild(this.canvas);
-            
-            // Overlay controls
-            const controls = document.createElement('div');
-            controls.style.position = 'absolute';
-            controls.style.bottom = '20px';
-            controls.style.left = '50%';
-            controls.style.transform = 'translateX(-50%)';
-            controls.style.display = 'flex';
-            controls.style.gap = '10px';
-            controls.style.background = 'rgba(0,0,0,0.8)';
-            controls.style.padding = '15px';
-            controls.style.borderRadius = '12px';
-            controls.style.border = '1px solid rgba(255,255,255,0.1)';
-    
-            controls.innerHTML = `
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="color:#aaa; font-size:0.8rem;">Bet Amount</label>
-                    <input type="number" id="crash-bet" value="100" min="1" step="1" style="padding:12px; border-radius:8px; border:1px solid #444; background:#222; color:white; width:120px; font-size:1rem;">
+            this.container.innerHTML = `
+                <div class="crash-wrapper" style="position:relative; width:100%; height:100%; background:#151921; border-radius:12px; overflow:hidden;">
+                    <canvas style="display:block; width:100%; height:100%;"></canvas>
+                    <div class="crash-overlay" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:5rem; font-weight:900; color:white; z-index:10; text-shadow: 0 4px 20px rgba(0,0,0,0.5); font-family: 'Roboto', sans-serif;">
+                        1.00x
+                    </div>
                 </div>
-                <button id="crash-btn" style="padding:0 40px; background:#00ff88; color:#000; border:none; border-radius:8px; font-weight:900; font-size:1.2rem; cursor:pointer; text-transform:uppercase; margin-left:10px; transition:0.2s;">BET</button>
             `;
+            this.canvas = this.container.querySelector('canvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.overlay = this.container.querySelector('.crash-overlay');
             
-            gameWrapper.appendChild(controls);
-            this.container.appendChild(gameWrapper);
-    
-            this.btn = controls.querySelector('#crash-btn');
-            this.input = controls.querySelector('#crash-bet');
-    
-            this.btn.addEventListener('click', () => {
-                if(this.running) this.cashOut();
-                else this.startGame();
-            });
-
-            // Add listener for input changes to validate/clamp if needed
-            this.input.addEventListener('input', (e) => {
-                if(e.target.value < 0) e.target.value = 0;
-            });
-    
-            this.drawGraph();
+            this.resize();
+            window.addEventListener('resize', () => this.resize());
         }
-    
-        startGame() {
-            if (this.running) return;
 
-            const bet = parseFloat(this.input.value);
-            if (!bet || bet <= 0) return alert("Enter valid bet");
-
-            if(window.MoonKat.updateBalance(-bet)) {
-                this.betAmount = bet;
-                this.running = true;
-                this.crashed = false;
-                this.multiplier = 1.00;
-                this.startTime = Date.now();
-                // User requested random from .5 to 100
-                // Simple uniform distribution: (Math.random() * 99.5) + 0.5
-                this.crashPoint = (Math.random() * 99.5) + 0.5;
-                this.crashPoint = Math.floor(this.crashPoint * 100) / 100;
-                
-                this.btn.innerText = "CASH OUT";
-                this.btn.style.background = "#ffcc00"; // Yellow for cashout
-                this.btn.style.color = "#000";
-                this.input.disabled = true;
-                
-                this.loop();
-            } else {
-                alert("Insufficient funds");
-            }
+        resize() {
+            if(!this.container || !this.canvas) return;
+            const rect = this.container.getBoundingClientRect();
+            this.width = rect.width;
+            this.height = rect.height;
+            this.canvas.width = this.width;
+            this.canvas.height = this.height;
+            if(this.state === 'IDLE') this.drawStatic();
         }
-    
+
+        // --- CORE LOGIC ---
+
+        generateCrashPoint() {
+            // Secure Random generation
+            const array = new Uint32Array(1);
+            window.crypto.getRandomValues(array);
+            const r = array[0] / (0xffffffff + 1); // 0 to 1
+            
+            // House Edge: 1% instant crash (1.00x)
+            // Pareto Distribution: E = 0.99 / (1 - r)
+            let crash = Math.floor(100 * 0.99 / (1 - r)) / 100;
+            
+            // Cap at 100x as requested
+            if (crash > 100.00) crash = 100.00;
+            
+            // Ensure min 1.00
+            return Math.max(1.00, crash);
+        }
+
+        placeBet(amount, autoOut = Infinity) {
+            if (this.state !== 'IDLE') return false;
+            if (amount <= 0) return false;
+
+            this.betAmount = amount;
+            this.autoCashOut = autoOut > 1 ? autoOut : Infinity;
+            this.crashPoint = this.generateCrashPoint();
+            this.multiplier = 1.00;
+            this.state = 'RUNNING';
+            this.startTime = Date.now();
+            
+            this.overlay.style.color = 'white';
+            
+            // Start Loop
+            this.loop();
+            return true;
+        }
+
         cashOut() {
-            if (!this.running || this.crashed) return;
+            // CRITICAL: Can only cash out if running and logic says we haven't crashed yet
+            if (this.state !== 'RUNNING') return false;
             
-            this.running = false;
-            const win = this.betAmount * this.multiplier;
-            window.MoonKat.updateBalance(win);
-            window.MoonKat.addXp(Math.floor(win/10)); // Add XP based on win
+            // Double check strict timing (prevent lag-switch exploits)
+            // We use the calculated multiplier from time, if it exceeds crash point, we essentially missed the window
+            // But since this is client-side sim, we just trust local state for now.
+            if (this.multiplier >= this.crashPoint) {
+                this.crash();
+                return false;
+            }
 
-            this.btn.innerText = `WON $${win.toFixed(2)}`;
-            this.btn.style.background = "#00ff88"; // Green for win
-            this.input.disabled = false;
+            this.state = 'CASHED_OUT';
+            const winAmount = this.betAmount * this.multiplier;
             
-            this.drawGraph(); // Final draw
-
-            setTimeout(() => {
-                if (!this.crashed) { // Only reset if not already crashed state (user cashed out early)
-                     this.btn.innerText = "BET";
-                }
-            }, 2000);
+            if (this.callbacks.onWin) this.callbacks.onWin(winAmount, this.multiplier);
+            
+            return true;
         }
-    
+
+        crash() {
+            this.state = 'CRASHED';
+            this.multiplier = this.crashPoint;
+            this.drawCrash();
+            if (this.callbacks.onCrash) this.callbacks.onCrash(this.crashPoint);
+        }
+
+        stop() {
+            if (this.rafId) cancelAnimationFrame(this.rafId);
+            this.state = 'IDLE';
+        }
+
         loop() {
-            if(!this.running) return;
+            if (this.state !== 'RUNNING' && this.state !== 'CASHED_OUT') return;
+
+            const now = Date.now();
+            const elapsed = (now - this.startTime) / 1000; // seconds
             
-            const elapsed = (Date.now() - this.startTime) / 1000;
-            // Exponential growth: 1 * e^(0.06 * t) - tweak 0.06 for speed
-            this.multiplier = Math.max(1.00, Math.pow(Math.E, 0.15 * elapsed));
+            // Growth Function: Exponential
+            // Speed up: 1 * e^(0.06 * t) -> reaches 2x in ~11s, 100x in ~76s
+            this.multiplier = Math.max(1.00, Math.pow(Math.E, 0.06 * elapsed));
+
+            // Visual Update
+            this.drawGraph(elapsed);
             
-            if(this.multiplier >= this.crashPoint) {
-                this.crashed = true;
-                this.running = false;
-                this.multiplier = this.crashPoint;
-                this.btn.innerText = "CRASHED";
-                this.btn.style.background = "#ff4500"; // Red for crash
-                this.btn.style.color = "#fff";
-                this.input.disabled = false;
+            // Logic Check
+            if (this.state === 'RUNNING') {
+                this.overlay.innerText = this.multiplier.toFixed(2) + "x";
+
+                // Check Auto Cashout
+                if (this.multiplier >= this.autoCashOut) {
+                    this.cashOut();
+                }
                 
-                setTimeout(() => {
-                    this.btn.innerText = "BET";
-                    this.btn.style.background = "#00ff88";
-                    this.btn.style.color = "#000";
-                }, 2000);
+                // Check Crash
+                if (this.multiplier >= this.crashPoint) {
+                    this.crash();
+                    return; // Stop loop
+                }
+            } else if (this.state === 'CASHED_OUT') {
+                // Continue showing graph until crash point, but user is safe
+                if (this.multiplier >= this.crashPoint) {
+                    this.crash(); // Visual crash
+                    return;
+                }
             }
-            
-            this.drawGraph();
-            
-            if(this.running) {
-                this.rafId = requestAnimationFrame(() => this.loop());
-            }
+
+            this.rafId = requestAnimationFrame(() => this.loop());
         }
-    
-        drawGraph() {
-            const ctx = this.ctx;
+
+        // --- DRAWING ---
+
+        drawStatic() {
+            this.ctx.fillStyle = '#151921';
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.drawGrid();
+        }
+
+        drawGrid() {
+            const w = this.width;
+            const h = this.height;
+            this.ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            for(let i=0; i<w; i+=80) { this.ctx.moveTo(i,0); this.ctx.lineTo(i,h); }
+            for(let i=0; i<h; i+=80) { this.ctx.moveTo(0,i); this.ctx.lineTo(w,i); }
+            this.ctx.stroke();
+        }
+
+        drawGraph(elapsed) {
             const w = this.width;
             const h = this.height;
             
-            ctx.clearRect(0,0,w,h);
-            
-            // Background Grid
-            ctx.strokeStyle = '#2a2e39';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            // Dynamic grid lines based on zoom could be cool, but fixed for now
-            for(let i=0; i<w; i+=100) { ctx.moveTo(i,0); ctx.lineTo(i,h); }
-            for(let i=0; i<h; i+=100) { ctx.moveTo(0,i); ctx.lineTo(w,i); }
-            ctx.stroke();
-            
-            // Curve
-            if(this.running || this.crashed) {
-                ctx.strokeStyle = this.crashed ? '#ff4500' : '#00ff88';
-                ctx.lineWidth = 6;
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(0, h);
-                
-                // Map time/multiplier to X/Y
-                // X axis = time (0 to 10s for example, then scroll?)
-                // Simple quadratic viz for effect
-                // Let's make it look like a rocket path
-                
-                const timeScale = 10; // seconds to fill screen width
-                const elapsed = (Date.now() - this.startTime) / 1000;
-                
-                // For visualization, we just draw a curve up to current point
-                // Normalized progress 0..1
-                // We use a log scale for Y so it doesn't shoot off screen immediately
-                
-                // Simple Bezier for "Rocket" feel
-                const progress = Math.min(1, (this.multiplier - 1) / 5); // caps at 5x for visual full height? No, let's just make it look good
-                
-                // Just draw a curve from bottom-left
-                // X is linear with time, Y is exponential
-                
-                const x = Math.min(w, (elapsed / timeScale) * w);
-                const y = h - Math.min(h, (Math.log(this.multiplier) / Math.log(10)) * h); // Log scale height
-                
-                // Draw curve
-                ctx.quadraticCurveTo(x/2, h, x, y);
-                ctx.stroke();
-                
-                // Rocket Icon at tip
-                ctx.save();
-                ctx.translate(x, y);
-                // content, x, y
-                ctx.fillStyle = 'white';
-                ctx.font = '24px "Font Awesome 5 Free"';
-                ctx.fillText('\uf135', 0, 0); // Rocket icon unicode
-                ctx.restore();
+            this.ctx.clearRect(0, 0, w, h);
+            this.drawStatic();
 
-                // Big Multiplier Text
-                ctx.fillStyle = this.crashed ? '#ff4500' : 'white';
-                ctx.font = 'bold 80px Roboto, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.shadowColor = "rgba(0,0,0,0.5)";
-                ctx.shadowBlur = 10;
-                ctx.fillText(`${this.multiplier.toFixed(2)}x`, w/2, h/2);
+            // Graph Curve
+            this.ctx.strokeStyle = this.state === 'CASHED_OUT' ? '#ffd700' : '#00ff88';
+            this.ctx.lineWidth = 5;
+            this.ctx.lineCap = 'round';
+            this.ctx.beginPath();
+
+            // Dynamic Scale
+            let timeScale = 10; // seconds width
+            if (elapsed > 8) timeScale = elapsed + 2;
+
+            const padding = 50;
+            const startX = padding;
+            const startY = h - padding;
+            
+            this.ctx.moveTo(startX, startY);
+
+            let currentX = startX;
+            let currentY = startY;
+
+            // Draw segments
+            const step = 0.1; 
+            for(let t=0; t<=elapsed; t+=step) {
+                const mult = Math.pow(Math.E, 0.06 * t);
                 
-                if(this.crashed) {
-                     ctx.font = 'bold 30px Roboto, sans-serif';
-                     ctx.fillStyle = '#ff4500';
-                     ctx.fillText("CRASHED", w/2, h/2 + 60);
-                }
-            } else {
-                 ctx.fillStyle = '#666';
-                 ctx.font = '20px Roboto, sans-serif';
-                 ctx.textAlign = 'center';
-                 ctx.textBaseline = 'middle';
-                 ctx.fillText("Place your bet to start the engine...", w/2, h/2);
+                const xPct = t / timeScale;
+                const drawX = padding + (w - padding * 2) * xPct;
+                
+                // Y Scale (Logarithmic for better visualization of height)
+                const yLog = Math.log(mult);
+                const maxLog = Math.log(Math.max(2, this.multiplier * 1.1));
+                const yPct = yLog / maxLog;
+                
+                const drawY = startY - (startY - padding) * yPct;
+                
+                this.ctx.lineTo(drawX, drawY);
+                currentX = drawX;
+                currentY = drawY;
             }
+            this.ctx.stroke();
+
+            // Rocket Icon
+            this.ctx.save();
+            this.ctx.translate(currentX, currentY);
+            this.ctx.rotate(-Math.PI / 4);
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = '24px "Font Awesome 5 Free"';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('🚀', 0, 0);
+            this.ctx.restore();
+            
+            // Area Fill
+            this.ctx.lineTo(currentX, startY);
+            this.ctx.lineTo(startX, startY);
+            this.ctx.fillStyle = this.state === 'CASHED_OUT' ? 'rgba(255, 215, 0, 0.1)' : 'rgba(0, 255, 136, 0.1)';
+            this.ctx.fill();
+        }
+
+        drawCrash() {
+            this.overlay.innerText = "CRASHED @ " + this.crashPoint.toFixed(2) + "x";
+            this.overlay.style.color = '#ff4500';
+            
+            // Shake
+            this.canvas.style.transform = "translate(5px, 5px)";
+            setTimeout(() => this.canvas.style.transform = "translate(-5px, -5px)", 50);
+            setTimeout(() => this.canvas.style.transform = "translate(0, 0)", 100);
         }
     }
 

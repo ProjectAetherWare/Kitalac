@@ -109,7 +109,7 @@
                     // In online mode, we just re-render the cached list in case tab changed
                     MK.renderFullLeaderboard();
                 }
-            }, 2000);
+            }, 1000);
 
             // Online Leaderboard Poller
             setInterval(async () => {
