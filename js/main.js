@@ -153,6 +153,14 @@
                 });
             }
 
+            // Login Button
+            const loginBtn = document.getElementById("btn-login");
+            if (loginBtn) {
+                loginBtn.addEventListener("click", () => {
+                    if (window.MK_Firebase) window.MK_Firebase.login();
+                });
+            }
+
             // Achievements
             const achBtn = document.getElementById("btn-achievements");
             const achModal = document.getElementById("achievements-modal");
