@@ -52,7 +52,8 @@ window.MoonKat.state = {
     history: [],
     bots: [],
     settings: {
-        sound: true
+        sound: true,
+        lowSpec: false
     },
     mode: 'offline' // 'offline' or 'online'
 };

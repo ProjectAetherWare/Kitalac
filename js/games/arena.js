@@ -570,6 +570,182 @@
             return;
         }
 
+        // --- TYPER (SKILL GAME) ---
+        if (gameId === 'typer') {
+            root.innerHTML = `
+                <div class="game-panel">
+                    <h2><i class="fas ${game.icon}"></i> ${game.name}</h2>
+                    <p class="section-subtitle">${game.desc}</p>
+                    <div id="typer-display" style="font-family:monospace; font-size:2rem; background:#222; padding:20px; border-radius:8px; margin:20px 0; letter-spacing:3px;">
+                        READY?
+                    </div>
+                    <div class="game-controls">
+                        <input id="typer-input" class="game-input" type="text" placeholder="Type here..." disabled autocomplete="off" />
+                        <button id="game-play-btn" class="game-btn">START (${game.cost || 20})</button>
+                    </div>
+                    <div id="game-log" class="game-log">Type the code exactly!</div>
+                </div>
+            `;
+            
+            const display = root.querySelector('#typer-display');
+            const input = root.querySelector('#typer-input');
+            const btn = root.querySelector('#game-play-btn');
+            const log = root.querySelector('#game-log');
+            
+            let targetText = "";
+            let startTime = 0;
+            let isPlaying = false;
+
+            btn.addEventListener('click', () => {
+                if(isPlaying) return;
+                const cost = game.cost || 20;
+                if(!MK.updateBalance(-cost)) return alert("Insufficient Funds");
+                
+                isPlaying = true;
+                btn.disabled = true;
+                input.disabled = false;
+                input.value = "";
+                input.focus();
+                
+                // Generate random code
+                const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                targetText = Array(8).fill(0).map(() => chars[Math.floor(Math.random()*chars.length)]).join("");
+                
+                display.innerText = "3...";
+                setTimeout(() => display.innerText = "2...", 500);
+                setTimeout(() => display.innerText = "1...", 1000);
+                setTimeout(() => {
+                    display.innerText = targetText;
+                    display.style.color = "var(--accent-primary)";
+                    startTime = Date.now();
+                }, 1500);
+            });
+
+            input.addEventListener('input', () => {
+                if(!isPlaying || startTime === 0) return;
+                const val = input.value.toUpperCase();
+                input.value = val;
+                
+                if (val === targetText) {
+                    const time = (Date.now() - startTime) / 1000;
+                    isPlaying = false;
+                    input.disabled = true;
+                    btn.disabled = false;
+                    
+                    let multi = 0;
+                    if(time < 2.0) multi = 5.0;
+                    else if(time < 3.0) multi = 2.5;
+                    else if(time < 4.0) multi = 1.2;
+                    
+                    if(multi > 0) {
+                        const win = (game.cost || 20) * multi;
+                        MK.updateBalance(win);
+                        display.innerHTML = `<span style="color:var(--accent-success)">${time.toFixed(2)}s (x${multi})</span>`;
+                        log.innerText = `Success! Won $${win}`;
+                    } else {
+                        display.innerHTML = `<span style="color:var(--accent-danger)">${time.toFixed(2)}s (Too Slow)</span>`;
+                        log.innerText = "Too slow!";
+                    }
+                } else if (!targetText.startsWith(val)) {
+                    // Mistake
+                    display.style.color = "var(--accent-danger)";
+                } else {
+                    display.style.color = "var(--accent-primary)";
+                }
+            });
+            return;
+        }
+
+        // --- MEMORY (SKILL GAME) ---
+        if (gameId === 'memory') {
+            root.innerHTML = `
+                <div class="game-panel">
+                    <h2><i class="fas ${game.icon}"></i> ${game.name}</h2>
+                    <p class="section-subtitle">${game.desc}</p>
+                    <div id="memory-grid" style="display:flex; gap:10px; justify-content:center; margin:30px 0;">
+                        <div class="mem-btn" data-id="1" style="width:60px; height:60px; background:#444; border-radius:50%; cursor:pointer;"></div>
+                        <div class="mem-btn" data-id="2" style="width:60px; height:60px; background:#444; border-radius:50%; cursor:pointer;"></div>
+                        <div class="mem-btn" data-id="3" style="width:60px; height:60px; background:#444; border-radius:50%; cursor:pointer;"></div>
+                        <div class="mem-btn" data-id="4" style="width:60px; height:60px; background:#444; border-radius:50%; cursor:pointer;"></div>
+                    </div>
+                    <div class="game-controls">
+                        <button id="game-play-btn" class="game-btn">START (${game.cost || 25})</button>
+                    </div>
+                    <div id="game-log" class="game-log">Watch the pattern!</div>
+                </div>
+            `;
+            
+            const btn = root.querySelector('#game-play-btn');
+            const log = root.querySelector('#game-log');
+            const tiles = root.querySelectorAll('.mem-btn');
+            let sequence = [];
+            let playerIdx = 0;
+            let isPlaying = false;
+            let isShowing = false;
+
+            const flash = (idx) => {
+                const tile = tiles[idx];
+                tile.style.background = 'var(--accent-primary)';
+                tile.style.boxShadow = '0 0 20px var(--accent-primary)';
+                setTimeout(() => {
+                    tile.style.background = '#444';
+                    tile.style.boxShadow = 'none';
+                }, 300);
+            };
+
+            btn.addEventListener('click', async () => {
+                if(isPlaying) return;
+                const cost = game.cost || 25;
+                if(!MK.updateBalance(-cost)) return alert("Insufficient Funds");
+                
+                isPlaying = true;
+                btn.disabled = true;
+                sequence = [];
+                playerIdx = 0;
+                
+                // Generate 5 step pattern
+                for(let i=0; i<5; i++) sequence.push(Math.floor(Math.random()*4));
+                
+                log.innerText = "Watch...";
+                isShowing = true;
+                
+                for(let i=0; i<sequence.length; i++) {
+                    await new Promise(r => setTimeout(r, 600));
+                    flash(sequence[i]);
+                }
+                
+                isShowing = false;
+                log.innerText = "Repeat the pattern!";
+            });
+
+            tiles.forEach((tile, i) => {
+                tile.addEventListener('mousedown', () => {
+                    if(!isPlaying || isShowing) return;
+                    
+                    flash(i);
+                    
+                    if(i === sequence[playerIdx]) {
+                        playerIdx++;
+                        if(playerIdx >= sequence.length) {
+                            // Win
+                            isPlaying = false;
+                            btn.disabled = false;
+                            const payout = (game.cost || 25) * 3;
+                            MK.updateBalance(payout);
+                            log.innerHTML = `<span style="color:var(--accent-success)">Correct! Won $${payout}</span>`;
+                        }
+                    } else {
+                        // Lose
+                        isPlaying = false;
+                        btn.disabled = false;
+                        log.innerHTML = `<span style="color:var(--accent-danger)">Wrong!</span>`;
+                        tile.style.background = 'red';
+                    }
+                });
+            });
+            return;
+        }
+
         // --- GENERIC GAMES ---
         root.innerHTML = `
             <div class="game-panel">
@@ -624,9 +800,11 @@
                 // Fallback for simple games: resolveOutcome uses Math.random internally
                 let result = { win: false, multiplier: 0, message: "Error", data: {} };
                 
-                // --- SIMPLE LOGIC DISPATCH ---
+                // --- LOGIC DISPATCH (ALL GAMES) ---
                 const r = Math.random();
-                switch (gameId) {
+                const logicId = gameId.replace('gem_', ''); // Handle gem variants with same logic
+                
+                switch (logicId) {
                     case "roulette": {
                         const res = r < 0.48 ? "red" : r < 0.96 ? "black" : "green";
                         result = { win: res === choice, multiplier: res === "green" ? 14 : 2, message: `Ball landed on ${res.toUpperCase()}.`, data: { color: res } };
@@ -635,9 +813,11 @@
                     case "slots": {
                         const s = ["🍒", "🍋", "💎", "7️⃣", "🔔"];
                         const a = s[Math.floor(Math.random()*s.length)], b = s[Math.floor(Math.random()*s.length)], c = s[Math.floor(Math.random()*s.length)];
-                        const win = (a===b && b===c) || (a===b || b===c || a===c);
-                        const mult = (a===b && b===c) ? (a==="7️⃣" ? 50 : 10) : 2;
-                        result = { win, multiplier: mult, message: `${a} ${b} ${c}`, data: { symbols: [a,b,c] } };
+                        // Bonus chance for pairs
+                        if(Math.random() > 0.7 && a !== b) { /* no mod, just random */ }
+                        const win = (a===b && b===c) || (a===b || b===c || a===c && Math.random() < 0.3);
+                        const mult = (a===b && b===c) ? (a==="7️⃣" ? 50 : 10) : (win ? 1.5 : 0);
+                        result = { win: mult > 0, multiplier: mult, message: `${a} ${b} ${c}`, data: { symbols: [a,b,c] } };
                         break;
                     }
                     case "coinflip": {
@@ -645,10 +825,17 @@
                         result = { win: f === choice, multiplier: 1.95, message: `Result: ${f.toUpperCase()}`, data: { face: f } };
                         break;
                     }
-                    case "dice": {
-                        const roll = Math.floor(r * 6) + 1;
-                        const win = (choice === "high" && roll >= 4) || (choice === "low" && roll <= 3);
-                        result = { win, multiplier: 1.95, message: `Rolled a ${roll}.`, data: { roll } };
+                    case "dice": 
+                    case "lucky7": {
+                        if (logicId === 'lucky7') {
+                             const d1 = Math.floor(Math.random()*6)+1, d2 = Math.floor(Math.random()*6)+1;
+                             const sum = d1+d2;
+                             result = { win: sum === 7, multiplier: 7, message: `Rolled ${d1}+${d2} = ${sum}`, data: { roll: sum } };
+                        } else {
+                             const roll = Math.floor(r * 6) + 1;
+                             const win = (choice === "high" && roll >= 4) || (choice === "low" && roll <= 3);
+                             result = { win, multiplier: 1.95, message: `Rolled a ${roll}.`, data: { roll } };
+                        }
                         break;
                     }
                     case "hilo": {
@@ -658,15 +845,27 @@
                         break;
                     }
                     case "blackjack": {
-                        const p = Math.floor(Math.random()*10)+12; // 12-21
+                        const p = Math.floor(Math.random()*10)+12; 
                         const d = Math.floor(Math.random()*10)+12;
                         const win = p > d && p <= 21; 
                         result = { win, multiplier: 2.5, message: `You: ${p}, Dealer: ${d}`, data: { p, d } };
                         break;
                     }
                     case "poker": {
-                        const win = r < 0.3; 
-                        result = { win, multiplier: 3, message: win ? "Jacks or Better!" : "High Card.", data: {} };
+                        const hands = ["High Card", "Pair", "Two Pair", "Three of a Kind", "Straight", "Flush", "Full House"];
+                        const hand = hands[Math.floor(Math.random() * hands.length)];
+                        const win = hands.indexOf(hand) > 0;
+                        result = { win, multiplier: Math.max(0, hands.indexOf(hand)), message: `Hand: ${hand}`, data: {} };
+                        break;
+                    }
+                    case "baccarat": {
+                        const pScore = Math.floor(Math.random() * 10);
+                        const bScore = Math.floor(Math.random() * 10);
+                        let outcome = 'tie';
+                        if (pScore > bScore) outcome = 'player';
+                        if (bScore > pScore) outcome = 'banker';
+                        const win = outcome === choice;
+                        result = { win, multiplier: outcome==='tie' ? 8 : 1.95, message: `P: ${pScore} | B: ${bScore}`, data: {} };
                         break;
                     }
                     case "racing": {
@@ -680,20 +879,23 @@
                         result = { win, multiplier: 1.4, message: win ? "GOAL!" : "SAVED!", data: { save } };
                         break;
                     }
+                    case "wheel":
                     case "crazywheel": {
-                        const m = [0, 0, 0, 1.5, 2, 5, 10, 50][Math.floor(Math.random()*8)];
+                        const multis = logicId === 'crazywheel' ? [0,0,0,2,5,10,25,100] : [0,0,1.5,1.5,2,3];
+                        const m = multis[Math.floor(Math.random()*multis.length)];
                         result = { win: m > 0, multiplier: m, message: `Spin: ${m}x`, data: { mult: m } };
                         break;
                     }
                     case "plinko":
                     case "plinkox": {
-                        const m = [0.2, 0.5, 1, 1.5, 3, 10][Math.floor(Math.random()*6)];
+                        const risk = logicId === 'plinkox' ? 2 : 1;
+                        const m = [0.2, 0.5, 1, 1.5, 3, 10 * risk][Math.floor(Math.random()*6)];
                         result = { win: m >= 1, multiplier: m, message: `Landed ${m}x`, data: { mult: m } };
                         break;
                     }
                     case "mines": {
-                        const win = r > 0.3;
-                        result = { win, multiplier: parseFloat(choice) || 1.5, message: win ? "Cleared!" : "Boom!", data: {} };
+                        const boom = Math.random() < 0.3;
+                        result = { win: !boom, multiplier: parseFloat(choice) || 1.5, message: !boom ? "Cleared!" : "Boom!", data: {} };
                         break;
                     }
                     case "revolver": {
@@ -702,13 +904,77 @@
                         break;
                     }
                     case "scratch": {
-                        const win = r < 0.25;
-                        result = { win, multiplier: 5, message: win ? "3 Matches!" : "No match.", data: {} };
+                        const matches = Math.random() < 0.3;
+                        result = { win: matches, multiplier: 5, message: matches ? "3 Matches!" : "No match.", data: {} };
                         break;
                     }
                     case "lotto": {
                         const n = Math.floor(Math.random()*10)+1;
                         result = { win: String(n) === choice, multiplier: 9, message: `Ball: ${n}`, data: { n } };
+                        break;
+                    }
+                    case "keno": {
+                        const hits = Math.floor(Math.random() * 5);
+                        const isEven = hits % 2 === 0;
+                        const win = (choice === 'even' && isEven) || (choice === 'odd' && !isEven);
+                        result = { win, multiplier: 1.9, message: `${hits} hits (${isEven?'Even':'Odd'})`, data: {} };
+                        break;
+                    }
+                    case "rps": {
+                        const cpu = ["rock", "paper", "scissors"][Math.floor(Math.random()*3)];
+                        let outcome = 'draw';
+                        if ((choice==='rock'&&cpu==='scissors') || (choice==='paper'&&cpu==='rock') || (choice==='scissors'&&cpu==='paper')) outcome = 'win';
+                        else if (choice !== cpu) outcome = 'lose';
+                        result = { win: outcome === 'win', multiplier: 2, message: `CPU: ${cpu.toUpperCase()}`, data: {} };
+                        if(outcome==='draw') { result.message = "Draw (Refund)"; result.multiplier = 1; result.win = true; }
+                        break;
+                    }
+                    case "limbo": {
+                        const target = parseFloat(choice) || 2.0;
+                        const flown = Math.random() * 10;
+                        result = { win: flown > target, multiplier: target, message: `Flown: ${flown.toFixed(2)}x`, data: {} };
+                        break;
+                    }
+                    case "tower": {
+                        const climb = Math.random() > 0.3;
+                        result = { win: climb, multiplier: 1.5, message: climb ? "Climbed!" : "Fell!", data: {} };
+                        break;
+                    }
+                    case "lootbox": {
+                        const rarity = Math.random();
+                        let tier = "Common";
+                        let val = 0.5;
+                        if(rarity > 0.6) { tier = "Uncommon"; val = 1.2; }
+                        if(rarity > 0.85) { tier = "Rare"; val = 3; }
+                        if(rarity > 0.95) { tier = "Legendary"; val = 10; }
+                        if(rarity > 0.99) { tier = "Mythic"; val = 50; }
+                        result = { win: val >= 1, multiplier: val, message: `${tier} Item`, data: {} };
+                        break;
+                    }
+                    case "graph": {
+                        const up = Math.random() > 0.5;
+                        result = { win: (choice === 'up' && up) || (choice === 'down' && !up), multiplier: 1.9, message: up ? "Graph went UP 📈" : "Graph went DOWN 📉", data: {} };
+                        break;
+                    }
+                    case "color": {
+                        const c = ["red", "blue", "yellow"][Math.floor(Math.random()*3)];
+                        result = { win: c === choice, multiplier: 2.9, message: `Color: ${c.toUpperCase()}`, data: {} };
+                        break;
+                    }
+                    case "oracle": {
+                        const ans = Math.random() > 0.5 ? "yes" : "no";
+                        result = { win: ans === choice, multiplier: 1.9, message: `Oracle says: ${ans.toUpperCase()}`, data: {} };
+                        break;
+                    }
+                    case "safe": {
+                        const rolled = Math.floor(Math.random()*10);
+                        const win = String(rolled) === choice;
+                        result = { win, multiplier: 9, message: `Code: ..${rolled}`, data: {} };
+                        break;
+                    }
+                    case "binary": {
+                        const bit = Math.random() > 0.5 ? "1" : "0";
+                        result = { win: bit === choice, multiplier: 1.9, message: `Bit: ${bit}`, data: {} };
                         break;
                     }
                     default: 
@@ -834,12 +1100,45 @@
 
     // --- HTML GENERATORS ---
     function getGameHTML(id) {
-        if(id === 'slots') return `<div class="slots-container"><div class="reel">?</div><div class="reel">?</div><div class="reel">?</div></div>`;
-        if(id === 'dice') return `<div class="dice-container"><i class="fas fa-dice-one fa-4x"></i></div>`;
-        if(id === 'roulette') return `<div class="roulette-wheel"><div class="wheel-inner"></div></div>`;
-        if(id === 'blackjack') return `<div style="font-size:4rem; text-align:center;"><i class="fas fa-heart" style="color:red;"></i> <i class="fas fa-spade"></i></div>`;
-        if(id === 'penalty') return `<div style="font-size:4rem; text-align:center;"><i class="fas fa-futbol"></i></div>`;
-        if(id === 'racing') return `<div style="font-size:3rem; display:flex; gap:10px; justify-content:center;"><i class="fas fa-horse"></i> <i class="fas fa-horse"></i> <i class="fas fa-horse"></i></div>`;
+        // Strip gem_ prefix for visuals
+        const baseId = id.replace('gem_', '');
+        
+        const icons = {
+            slots: '<div class="slots-container"><div class="reel">🍒</div><div class="reel">7️⃣</div><div class="reel">💎</div></div>',
+            dice: '<div class="dice-container"><i class="fas fa-dice-one fa-4x"></i> <i class="fas fa-dice-two fa-4x"></i></div>',
+            roulette: '<div class="roulette-wheel"><div class="wheel-inner"></div></div>',
+            blackjack: '<div class="cards-display"><div class="card red">♥ Q</div><div class="card black">♠ A</div></div>',
+            poker: '<div class="cards-display"><div class="card">10</div><div class="card">J</div><div class="card">Q</div><div class="card">K</div><div class="card">A</div></div>',
+            coinflip: '<div class="coin-visual"><div class="coin-face">💰</div></div>',
+            hilo: '<div class="hilo-table"><div class="card-large">7</div><div class="hilo-arrow">?</div></div>',
+            mines: '<div class="mines-grid">' + Array(25).fill('<div class="mine-tile"></div>').join('') + '</div>',
+            keno: '<div class="keno-grid">' + Array(20).fill(0).map((_,i)=>`<div class="keno-ball">${i+1}</div>`).join('') + '</div>',
+            plinko: '<div class="plinko-board"><div class="peg-row">.</div><div class="peg-row">...</div><div class="peg-row">.....</div></div>',
+            plinkox: '<div class="plinko-board"><div class="peg-row">.</div><div class="peg-row">...</div><div class="peg-row">.....</div></div>',
+            wheel: '<div class="wheel-spinner"><i class="fas fa-dharmachakra fa-spin fa-4x"></i></div>',
+            crash: '<div class="rocket-preview"><i class="fas fa-rocket fa-3x"></i></div>',
+            racing: '<div class="race-track"><i class="fas fa-horse"></i> 💨</div>',
+            rps: '<div class="rps-icons"><i class="fas fa-hand-rock fa-2x"></i> <i class="fas fa-hand-paper fa-2x"></i> <i class="fas fa-hand-scissors fa-2x"></i></div>',
+            tower: '<div class="tower-ladder"><div class="rung"></div><div class="rung"></div><div class="rung"></div></div>',
+            limbo: '<div class="limbo-bar">__________________ 🚀</div>',
+            penalty: '<div class="penalty-goal"><div class="goalie">🥅</div>⚽</div>',
+            safe: '<div class="safe-dial"><i class="fas fa-circle-notch fa-3x"></i></div>',
+            scratch: '<div class="scratch-card">▒▒▒▒▒▒</div>',
+            lotto: '<div class="lotto-balls"><span class="ball">?</span><span class="ball">?</span><span class="ball">?</span></div>',
+            graph: '<div class="graph-line"><i class="fas fa-chart-line fa-3x"></i></div>',
+            oracle: '<div class="oracle-ball"><i class="fas fa-eye fa-3x"></i></div>',
+            baccarat: '<div class="baccarat-table">P: 8 | B: 9</div>',
+            crazywheel: '<div class="crazy-wheel-vis">🎡</div>',
+            revolver: '<div class="revolver-cyl"><i class="fas fa-crosshairs fa-3x"></i></div>',
+            binary: '<div class="binary-stream">010110...</div>',
+            color: '<div class="color-wheel"><div class="c-red"></div><div class="c-blue"></div><div class="c-yellow"></div></div>',
+            lootbox: '<div class="loot-box-anim"><i class="fas fa-box-open fa-3x"></i></div>',
+            lucky7: '<div class="dice-container"><i class="fas fa-dice fa-3x"></i> <i class="fas fa-dice fa-3x"></i></div>',
+            memory: '<div class="memory-grid">💡</div>',
+            typer: '<div class="typer-box">⌨️</div>'
+        };
+
+        if (icons[baseId]) return icons[baseId];
         return `<div class="visual-placeholder"><i class="fas fa-gamepad fa-4x" style="opacity:0.5;"></i></div>`;
     }
 

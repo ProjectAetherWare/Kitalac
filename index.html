@@ -6,6 +6,7 @@
     <title>Kitalac | The Next Gen Trading Sim</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/style-extra.css">
+    <link rel="stylesheet" href="css/style-lowspec.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
 </head>
@@ -312,6 +313,16 @@
                                 <textarea id="setting-bio" class="setting-input" style="height:80px; resize:none;" placeholder="Tell the world about your trading skills..."></textarea>
                                 
                                 <button class="btn-action" onclick="app.saveProfile()" style="margin-top:10px; background:var(--accent-primary); color:black;">Update Profile</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h3>Performance</h3>
+                            <div style="margin-top:10px;">
+                                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                                    <input type="checkbox" id="setting-lowspec" onchange="app.toggleLowSpec()">
+                                    <span>Bad PC Mode (Reduces Animations & Visuals)</span>
+                                </label>
                             </div>
                         </div>
 

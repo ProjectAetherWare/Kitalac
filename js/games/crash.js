@@ -91,11 +91,10 @@
                 this.crashed = false;
                 this.multiplier = 1.00;
                 this.startTime = Date.now();
-                // Crash point logic: 1% instant crash, otherwise Pareto distribution
-                // formula: E = 0.99 / (1 - U) where U is random [0,1)
-                const r = Math.random();
-                let rawCrash = Math.floor(100 * (0.99 / (1 - r))) / 100;
-                this.crashPoint = Math.min(100.00, Math.max(1.00, rawCrash));
+                // User requested random from .5 to 100
+                // Simple uniform distribution: (Math.random() * 99.5) + 0.5
+                this.crashPoint = (Math.random() * 99.5) + 0.5;
+                this.crashPoint = Math.floor(this.crashPoint * 100) / 100;
                 
                 this.btn.innerText = "CASH OUT";
                 this.btn.style.background = "#ffcc00"; // Yellow for cashout

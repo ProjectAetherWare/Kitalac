@@ -29,6 +29,11 @@
             if(MK.Map) MK.Map.init();
             if(MK.VIP) MK.VIP.init();
 
+            // Apply Low Spec if saved
+            if (MK.state.settings && MK.state.settings.lowSpec) {
+                document.body.classList.add('low-spec');
+            }
+
             this.bindArenaCards();
             this.goTo("market");
             
@@ -207,6 +212,8 @@
             if (page === "settings") {
                 const input = document.getElementById("setting-username");
                 if (input) input.value = MK.state.user.username;
+                const lowSpec = document.getElementById("setting-lowspec");
+                if (lowSpec && MK.state.settings) lowSpec.checked = MK.state.settings.lowSpec;
             }
 
             if (page === "market") {
@@ -294,6 +301,22 @@
             MK.state.user.username = value;
             MK.renderUserStats();
             alert("Username updated.");
+        },
+
+        toggleLowSpec() {
+             const cb = document.getElementById('setting-lowspec');
+             MK.state.settings.lowSpec = cb.checked;
+             
+             if(cb.checked) {
+                 document.body.classList.add('low-spec');
+                 // Reduce ticker speed
+                 if(MK.setTickerSpeed) MK.setTickerSpeed(0.5);
+             } else {
+                 document.body.classList.remove('low-spec');
+                 if(MK.setTickerSpeed) MK.setTickerSpeed(1.5);
+             }
+             
+             if(MK.Saves) MK.Saves.saveCurrent();
         },
 
         setMode(mode) {

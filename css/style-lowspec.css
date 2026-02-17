@@ -1,0 +1,34 @@
+
+/* Low Spec Mode Optimizations */
+body.low-spec * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: none !important;
+    animation: none !important;
+    backdrop-filter: none !important;
+}
+
+body.low-spec .glass-panel,
+body.low-spec .sidebar,
+body.low-spec .top-bar,
+body.low-spec .modal-content,
+body.low-spec .game-panel,
+body.low-spec .trollbox-panel {
+    background: #111 !important;
+    border: 1px solid #333 !important;
+}
+
+body.low-spec .dot-pulse {
+    animation: none !important;
+    background: var(--accent-success);
+    opacity: 1;
+}
+
+body.low-spec canvas {
+    image-rendering: pixelated; /* Cheaper scaling */
+}
+
+/* Hide non-essential visual fluff */
+body.low-spec .mouse-glow {
+    display: none !important;
+}
