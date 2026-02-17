@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitalac | The Next Gen Trading Sim</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style-extra.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar glass-panel">
+            <div class="logo">
+                <img src="logo.png" alt="Kitalac" style="height:40px; width:auto; margin-right:10px;">
+                <h1>Kitalac</h1>
+            </div>
+
+            <!-- Moved User Controls Here -->
+            <div class="sidebar-user-section">
+                <div class="user-profile-header">
+                    <div class="status-indicator">
+                        <span id="header-username">Guest</span>
+                    </div>
+                </div>
+                
+                <div class="wallet-container">
+                    <div class="wallet-row">
+                        <span class="currency-label">CASH</span>
+                        <span class="currency-value">$<span id="user-balance">0.00</span></span>
+                    </div>
+                    <div class="wallet-row premium">
+                        <span class="currency-label">GEMS</span>
+                        <span class="currency-value"><i class="fas fa-gem"></i> <span id="user-premium">0</span></span>
+                    </div>
+                </div>
+
+                <div class="user-actions" style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                     <button id="btn-daily-bonus" class="btn-sm" style="background:var(--accent-success); color:black; font-weight:700;">
+                        <i class="fas fa-gift"></i> Daily
+                     </button>
+                     <button id="btn-achievements" class="btn-sm" style="background:rgba(255,255,255,0.1); font-weight:700;">
+                        <i class="fas fa-medal"></i> Trophies
+                     </button>
+                </div>
+                <div style="margin-top:8px;">
+                    <button id="vip-buy-btn" class="btn-sm" style="width:100%; font-weight:bold; font-size:0.8rem; padding:8px;"></button>
+                </div>
+            </div>
+
+            <nav id="main-nav">
+                <div class="nav-item" data-page="market">
+                    <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Market
+                </div>
+                <div class="nav-item" data-page="portfolio">
+                    <span class="nav-icon"><i class="fas fa-wallet"></i></span> Portfolio
+                </div>
+                <div class="nav-item" data-page="map">
+                    <span class="nav-icon"><i class="fas fa-map-marked-alt"></i></span> World Map
+                </div>
+                <div class="nav-item" data-page="assets">
+                    <span class="nav-icon"><i class="fas fa-car"></i></span> Assets
+                </div>
+                <div class="nav-item" data-page="arena">
+                    <span class="nav-icon"><i class="fas fa-dice"></i></span> The Arena
+                </div>
+                <div class="nav-item" data-page="sports">
+                    <span class="nav-icon"><i class="fas fa-futbol"></i></span> Sports
+                </div>
+                <div class="nav-item" data-page="launchpad">
+                    <span class="nav-icon"><i class="fas fa-rocket"></i></span> Launchpad
+                </div>
+                <div class="nav-item" data-page="leaderboard">
+                    <span class="nav-icon"><i class="fas fa-trophy"></i></span> Leaderboard
+                </div>
+                <div class="nav-item" data-page="settings">
+                    <span class="nav-icon"><i class="fas fa-cog"></i></span> Settings
+                </div>
+            </nav>
+
+            <div class="xp-card">
+                <div class="tier-label">CURRENT RANK</div>
+                <div class="tier-name">
+                    <span id="user-tier-icon">🌑</span>
+                    <span id="user-tier-name">Stray Kat</span>
+                </div>
+                <div class="xp-bar-bg">
+                    <div id="xp-bar-fill" class="xp-bar-fill"></div>
+                </div>
+                <div class="xp-text"><span id="user-xp">0</span> / <span id="next-level-xp">1000</span> XP</div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-bar">
+                <div class="status-indicator">
+                    <div class="dot-pulse"></div> 
+                    <span id="online-users">8,492</span> Online
+                </div>
+                <div class="icon-btn" onclick="app.toggleSound()" title="Sound Toggle"><i class="fas fa-volume-up"></i></div>
+            </header>
+
+            <!-- Dynamic Area -->
+            <div id="content-area" class="content-area">
+                
+                <!-- PAGE: PORTFOLIO -->
+                <section id="page-portfolio" class="page">
+                    <div class="section-title">
+                        <h2>My Portfolio</h2>
+                        <div class="section-subtitle">Track your net worth and asset performance.</div>
+                    </div>
+                    <div class="glass-panel" style="padding:20px; margin-bottom:20px;">
+                        <div class="portfolio-stats" style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <h3 style="color:var(--text-secondary); font-size:0.9rem;">TOTAL NET WORTH</h3>
+                                <div style="font-size:2rem; font-weight:900; color:var(--accent-primary);" id="portfolio-total">$0.00</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div id="portfolio-change" style="font-size:1.2rem; font-weight:bold;">+0.00%</div>
+                                <span style="font-size:0.8rem; color:var(--text-secondary);">24h Performance</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="portfolio-list" class="market-list"></div>
+                </section>
+
+                <!-- PAGE: MAP -->
+                <section id="page-map" class="page" style="height: calc(100vh - 180px); overflow:hidden; position:relative;">
+                    <div id="map-container" style="width:100%; height:100%; cursor:grab;"></div>
+                    <div class="map-controls" style="position:absolute; top:20px; right:20px; z-index:10; display:flex; flex-direction:column; gap:10px;">
+                        <div class="glass-panel" style="padding:10px; font-size:0.9rem;">
+                            <i class="fas fa-square" style="color:#2ecc71"></i> Owned
+                            <i class="fas fa-square" style="color:#e74c3c"></i> Taken
+                            <i class="fas fa-square" style="color:#34495e"></i> For Sale
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PAGE: MARKET -->
+                <section id="page-market" class="page active">
+                    <div id="market-trending-container" class="market-trending-strip">
+                        <!-- Filled by JS -->
+                    </div>
+                    <div class="section-title">
+                        <h2>Market Overview</h2>
+                        <div class="section-subtitle">Real-time simulated volatility engine.</div>
+                    </div>
+
+                    <div id="market-list" class="market-list">
+                        <!-- Filled by JS -->
+                    </div>
+                </section>
+
+                <!-- PAGE: ARENA -->
+                <section id="page-arena" class="page">
+                    <div class="section-title">
+                        <h2>The Arena</h2>
+                        <div class="section-subtitle">15 games, smarter odds, cleaner UI, and XP on every round.</div>
+                    </div>
+                    <div id="arena-grid" class="arena-grid"></div>
+                </section>
+
+                <!-- PAGE: GAME -->
+                <section id="page-game" class="page">
+                    <button class="btn-action" id="back-to-arena" style="background:rgba(255,255,255,0.1); margin-bottom:20px;">← Back to Arena</button>
+                    <div id="game-canvas-area" class="game-shell"></div>
+                </section>
+
+                <!-- PAGE: SPORTS -->
+                <section id="page-sports" class="page">
+                    <div id="sports-container"></div>
+                </section>
+
+                <!-- PAGE: LAUNCHPAD -->
+                <section id="page-launchpad" class="page">
+                    <div class="settings-panel">
+                        <h2 style="margin-bottom:20px;">Launch Token</h2>
+                        <form id="create-coin-form" class="setting-group">
+                            <div style="margin-bottom:15px;">
+                                <label class="setting-label">Token Name</label>
+                                <input type="text" id="coin-name" class="setting-input" placeholder="e.g. MoonDog" required>
+                            </div>
+                            <div style="margin-bottom:15px;">
+                                <label class="setting-label">Ticker Symbol</label>
+                                <input type="text" id="coin-ticker" class="setting-input" placeholder="e.g. MDOG" required>
+                            </div>
+                            <div style="margin-bottom:15px;">
+                                <label class="setting-label">Launch Amount (tokens)</label>
+                                <input type="number" id="coin-launch-amount" class="setting-input" value="1000000" min="1000" step="1000" required>
+                            </div>
+                            <button type="submit" class="btn-action btn-buy" style="width:100%; padding:16px;">Deploy (Cost: $500)</button>
+                        </form>
+                        <div class="setting-group">
+                            <h3>Launchpad Stats</h3>
+                            <p class="section-subtitle">Total Launched Tokens: <span id="launchpad-total-tokens">0</span></p>
+                            <p class="section-subtitle">Total Supply Deployed: <span id="launchpad-total-supply">0</span></p>
+                            <div id="launchpad-recent-list" style="margin-top:12px;"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PAGE: ASSETS -->
+                <section id="page-assets" class="page">
+                    <div class="section-title">
+                        <h2>Asset Market</h2>
+                        <div class="section-subtitle">Buy luxury items, vehicles, and tech. Exchange currency.</div>
+                    </div>
+
+                    <!-- Currency Exchange -->
+                    <div class="exchange-panel glass-panel">
+                        <h3>Currency Exchange</h3>
+                        <div class="exchange-controls">
+                            <div class="exchange-group">
+                                <input type="number" id="exchange-amount" placeholder="Amount" class="game-input">
+                                <select id="exchange-direction" class="game-select">
+                                    <option value="buy">Buy Gems ($100 -> 1 Gem)</option>
+                                    <option value="sell">Sell Gems (1 Gem -> $50)</option>
+                                </select>
+                                <button class="btn-action btn-buy" onclick="app.exchangeCurrency()">Exchange</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin: 20px 0;">Market Listings</h3>
+                    <div id="asset-market-grid" class="asset-grid">
+                        <!-- Filled by JS -->
+                    </div>
+
+                    <h3 style="margin: 20px 0;">Your Inventory</h3>
+                    <div id="user-inventory-list" class="inventory-grid">
+                        <!-- Filled by JS -->
+                    </div>
+                </section>
+
+                <!-- PAGE: LEADERBOARD -->
+                <section id="page-leaderboard" class="page">
+                    <div class="section-title">
+                        <h2>Global Rankings</h2>
+                        <div class="section-subtitle">Top traders. Updates live.</div>
+                    </div>
+                    
+                            <div class="leaderboard-tabs">
+                                <button class="lb-tab active" onclick="MoonKat.setLeaderboardTab('rich')">Most Money</button>
+                                <button class="lb-tab" onclick="MoonKat.setLeaderboardTab('poor')">Most Broke</button>
+                                <button class="lb-tab" onclick="MoonKat.setLeaderboardTab('top10')">Top 10</button>
+                                <button class="lb-tab" onclick="MoonKat.setLeaderboardTab('top100')">Top 100</button>
+                                <button class="lb-tab" onclick="MoonKat.setLeaderboardTab('global')">Global View</button>
+                            </div>
+
+                            <div style="margin: 10px 0; display:flex; gap:10px;">
+                                <input type="text" id="user-search-input" placeholder="Search Username..." style="background:rgba(255,255,255,0.1); color:white; border:1px solid var(--glass-border); padding:10px; border-radius:8px; flex:1;">
+                                <button class="btn-action" onclick="app.searchUserFromInput()" style="width:auto;">Search</button>
+                            </div>
+
+                    <div class="leaderboard-full glass-panel">
+                        <div class="leaderboard-header">
+                            <span>Rank</span>
+                            <span>Trader</span>
+                            <span>Tier</span>
+                            <span>Net Worth</span>
+                            <span>Win Rate</span>
+                            <span>Games</span>
+                        </div>
+                        <div id="leaderboard-full-list" class="leaderboard-body">
+                            <!-- Filled by JS -->
+                        </div>
+                    </div>
+                </section>
+
+                 <!-- PAGE: SETTINGS -->
+                 <section id="page-settings" class="page">
+                    <div class="section-title">
+                        <h2>System Settings</h2>
+                    </div>
+                    
+                        <div class="setting-group">
+                            <h3>Game Mode & Account</h3>
+                            
+                            <div style="background:rgba(0,0,0,0.3); padding:15px; border-radius:10px; margin-bottom:15px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                    <span>Current Mode:</span>
+                                    <span id="current-mode-display" style="font-weight:bold; color:var(--accent-primary)">OFFLINE (BOTS)</span>
+                                </div>
+                                <div style="display:flex; gap:10px;">
+                                    <button class="btn-action" onclick="app.setMode('offline')">Offline Mode</button>
+                                    <button class="btn-action" onclick="app.setMode('online')">Live Online</button>
+                                </div>
+                                <p style="font-size:0.8rem; color:#888; margin-top:5px;">Online mode requires Google Login. Data is separate.</p>
+                            </div>
+
+                            <div id="auth-section">
+                                <button id="btn-login" class="btn-action btn-premium" style="width:100%; display:none;">Login with Google</button>
+                                <div id="logged-in-ui" style="display:none;">
+                                    <p>Logged in as: <span id="auth-email" style="color:white;"></span></p>
+                                    <button class="btn-action" onclick="window.MK_Firebase.logout()" style="margin-top:10px;">Logout</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h3>Profile</h3>
+                            <div style="margin-top:15px;">
+                                <label class="setting-label">Username</label>
+                                <input type="text" id="setting-username" class="setting-input" placeholder="Enter username">
+                                
+                                <label class="setting-label" style="margin-top:10px; display:block;">Bio</label>
+                                <textarea id="setting-bio" class="setting-input" style="height:80px; resize:none;" placeholder="Tell the world about your trading skills..."></textarea>
+                                
+                                <button class="btn-action" onclick="app.saveProfile()" style="margin-top:10px; background:var(--accent-primary); color:black;">Update Profile</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h3>Data Management</h3>
+                            <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:15px;">Your data is stored locally. Export it to transfer devices.</p>
+                            
+                            <div style="display:flex; gap:10px;">
+                                <button class="btn-action" style="flex:1; background:rgba(255,255,255,0.1);" onclick="app.exportData()">Backup Current</button>
+                                <button class="btn-action" style="flex:1; background:rgba(255,255,255,0.1);" onclick="app.importData()">Import String</button>
+                            </div>
+                            
+                            <h3 style="margin-top:20px; margin-bottom:10px;">Save Slots</h3>
+                            <div id="saves-list" class="saves-list">
+                                <!-- JS Populated -->
+                            </div>
+
+                            <button class="btn-action btn-danger" onclick="app.resetData()">HARD RESET (Wipe Current)</button>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Chat Button -->
+    <div id="chat-toggle" class="chat-toggle-btn">
+        <i class="fas fa-comments"></i>
+    </div>
+
+    <!-- Chat Window -->
+    <div id="trollbox" class="trollbox-panel glass-panel">
+        <div class="trollbox-header">
+            <span>Trollbox</span>
+            <span id="close-chat" style="cursor:pointer;">×</span>
+        </div>
+        <div id="trollbox-messages" class="trollbox-messages">
+            <!-- JS Filled -->
+        </div>
+        <div class="trollbox-input">
+            <input type="text" placeholder="Login to chat..." disabled style="cursor:not-allowed; opacity:0.6;">
+        </div>
+    </div>
+
+    <!-- Ticker -->
+    <div id="live-ticker" class="live-ticker glass-panel">
+        <!-- JS Filled -->
+    </div>
+
+    <!-- Achievements Modal -->
+    <div id="achievements-modal" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; backdrop-filter:blur(5px); justify-content:center; align-items:center;">
+        <div class="modal-content glass-panel" style="width:500px; max-width:90%; padding:24px; border-radius:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2><i class="fas fa-trophy" style="color:#ffd700;"></i> Achievements</h2>
+                <button id="close-achievements" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div id="achievements-list" style="max-height:400px; overflow-y:auto; padding-right:10px;">
+                <!-- JS Filled -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Details Modal -->
+    <div id="stock-modal" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; backdrop-filter:blur(5px); justify-content:center; align-items:center;">
+        <div class="modal-content glass-panel" style="width:700px; max-width:90%; padding:24px; border-radius:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 id="modal-stock-name">Stock Details</h2>
+                <button id="close-stock-modal" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div id="stock-modal-body" style="padding:10px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                    <div>
+                        <div style="font-size:0.9rem; color:var(--text-secondary);">CURRENT PRICE</div>
+                        <div id="modal-stock-price" style="font-size:2rem; font-weight:bold;">$0.00</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:0.9rem; color:var(--text-secondary);">24H CHANGE</div>
+                        <div id="modal-stock-change" style="font-size:1.5rem; font-weight:bold;">0.00%</div>
+                    </div>
+                </div>
+                <div class="chart-container" style="height:250px; width:100%; background:rgba(0,0,0,0.2); border-radius:12px; margin-bottom:20px; overflow:hidden;">
+                    <canvas id="modal-stock-chart" style="width:100%; height:100%;"></canvas>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="modal-buy-btn" class="btn-action btn-buy" style="flex:1">BUY</button>
+                    <button id="modal-sell-btn" class="btn-action btn-sell" style="flex:1">SELL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/data.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/saves.js"></script>
+    <script type="module" src="js/firebase-ctrl.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/vip.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/assets.js"></script>
+    <script src="js/achievements.js"></script>
+    <script src="js/sports.js"></script>
+    <script src="js/market.js"></script>
+    <script src="js/games/arena.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
