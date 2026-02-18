@@ -2,30 +2,49 @@
     window.MoonKat = window.MoonKat || {};
 
     class RacingGame {
-        constructor(containerId, gameData) {
+        constructor(containerId, currency = 'cash') {
             this.container = document.getElementById(containerId);
-            this.gameData = gameData || { name: "Bot Racing", icon: "fa-horse-head", desc: "Bet on the winner.", options: ["Alpha", "Beta", "Gamma", "Delta"], cost: 40 };
+            this.currency = currency;
             this.setupUI();
         }
 
         setupUI() {
+            const currencyLabel = this.currency === 'gems' ? 'GEMS' : 'CASH';
+            const step = this.currency === 'gems' ? 1 : 10;
+            const min = this.currency === 'gems' ? 1 : 10;
+            const defaultBet = this.currency === 'gems' ? 10 : 40;
+
             this.container.innerHTML = `
                 <div class="game-panel">
-                    <h2><i class="fas ${this.gameData.icon}"></i> ${this.gameData.name}</h2>
-                    <p class="section-subtitle">${this.gameData.desc}</p>
+                    <h2><i class="fas fa-horse-head"></i> Bot Racing</h2>
+                    <p class="section-subtitle">Bet on the winner (4x Payout)</p>
                     
-                    <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
-                        <div class="race-track"><i class="fas fa-horse"></i> 💨</div>
+                    <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                        <div class="race-track" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-around; padding: 10px;">
+                            <!-- Racers will be animated here -->
+                            <div style="font-size: 3rem; text-align: center; color: var(--text-muted); opacity: 0.5;">
+                                <i class="fas fa-flag-checkered"></i>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="game-controls">
-                        <input id="game-bet" class="game-input" type="number" value="${this.gameData.cost || 40}" min="1" step="10" placeholder="Bet Amount" />
-                        <select id="game-choice" class="game-select">
-                            ${this.gameData.options.map(o => `<option value="${o}">${o.toUpperCase()}</option>`).join('')}
-                        </select>
-                        <button id="game-play-btn" class="game-btn">PLAY ROUND</button>
+                        <div class="control-group">
+                            <label>Bet Amount (${currencyLabel})</label>
+                            <input id="game-bet" class="game-input" type="number" value="${defaultBet}" min="${min}" step="${step}" />
+                        </div>
+                        <div class="control-group">
+                            <label>Select Winner</label>
+                            <div class="btn-group-row">
+                                <button class="game-btn-opt active" data-choice="Alpha">Alpha</button>
+                                <button class="game-btn-opt" data-choice="Beta">Beta</button>
+                                <button class="game-btn-opt" data-choice="Gamma">Gamma</button>
+                                <button class="game-btn-opt" data-choice="Delta">Delta</button>
+                            </div>
+                        </div>
+                        <button id="game-play-btn" class="game-btn action-btn">START RACE</button>
                     </div>
-                    <div id="game-log" class="game-log">Place a bet and play!</div>
+                    <div id="game-log" class="game-log">Select a bot and place your bet!</div>
                 </div>
             `;
 
@@ -33,9 +52,30 @@
             this.log = this.container.querySelector("#game-log");
             this.playBtn = this.container.querySelector("#game-play-btn");
             this.betInput = this.container.querySelector("#game-bet");
-            this.choiceInput = this.container.querySelector("#game-choice");
+            this.optionBtns = this.container.querySelectorAll(".game-btn-opt");
+            
+            this.selectedChoice = 'Alpha'; // Default
+
+            this.optionBtns.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    this.optionBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.selectedChoice = btn.getAttribute('data-choice');
+                });
+            });
 
             this.playBtn.addEventListener("click", () => this.play());
+        }
+
+        updateCurrency(amount) {
+            if (this.currency === 'gems') {
+                if (window.MoonKat.state.user.premiumBalance + amount < 0) return false;
+                window.MoonKat.state.user.premiumBalance += amount;
+            } else {
+                if (!window.MoonKat.updateBalance(amount)) return false;
+            }
+            window.MoonKat.renderUserStats();
+            return true;
         }
 
         play() {
@@ -44,51 +84,75 @@
                  this.log.innerText = "Invalid Bet";
                  return;
             }
-            if (!window.MoonKat.updateBalance(-bet)) {
-                 this.log.innerText = "Insufficient Funds";
+
+            if (!this.updateCurrency(-bet)) {
+                 this.log.innerText = `Insufficient ${this.currency === 'gems' ? 'Gems' : 'Funds'}`;
                  return;
             }
 
             this.playBtn.disabled = true;
             this.log.innerHTML = "Racing...";
             
-            // Animation
-            this.visContainer.style.opacity = '0.5';
-            this.visContainer.style.transform = 'scale(0.95)';
+            // Simple visual representation of the race
+            this.visContainer.innerHTML = '';
+            const racers = ['Alpha', 'Beta', 'Gamma', 'Delta'];
+            const racerEls = [];
+            
+            racers.forEach((name, i) => {
+                const el = document.createElement('div');
+                el.style.cssText = `display: flex; align-items: center; width: 100%; margin-bottom: 5px;`;
+                el.innerHTML = `<span style="width: 60px; font-size: 0.8rem;">${name}</span> <div style="flex:1; background: #333; height: 10px; border-radius: 5px; position: relative;"><div class="racer-dot" style="position: absolute; left: 0; top: -5px; width: 20px; height: 20px; background: var(--accent-primary); border-radius: 50%; transition: left 0.5s linear;"></div></div>`;
+                this.visContainer.appendChild(el);
+                racerEls.push({ name, el: el.querySelector('.racer-dot') });
+            });
 
-            setTimeout(() => {
-                const choice = this.choiceInput.value;
-                const winner = ["Alpha", "Beta", "Gamma", "Delta"][Math.floor(Math.random()*4)];
-                const result = { win: winner === choice, multiplier: 3.8, message: `Winner: ${winner}`, data: { winner } };
+            // Simulate race steps
+            let steps = 0;
+            const maxSteps = 20;
+            const interval = setInterval(() => {
+                steps++;
+                let positions = racerEls.map(r => ({ ...r, pos: parseFloat(r.el.style.left) || 0 }));
                 
-                // End Animation
-                this.visContainer.style.opacity = '1';
-                this.visContainer.style.transform = 'scale(1)';
-                
-                this.visContainer.innerHTML = result.win 
-                    ? `<div style="color:var(--accent-success); font-size:3rem; font-weight:bold; animation: pulse 0.5s;"><i class="fas fa-trophy"></i> ${winner}</div>`
-                    : `<div style="color:var(--accent-danger); font-size:3rem; font-weight:bold; animation: shake 0.5s;"><i class="fas fa-times-circle"></i> ${winner}</div>`;
+                // Random movement
+                racerEls.forEach(r => {
+                    const move = Math.random() * 10;
+                    const current = parseFloat(r.el.style.left) || 0;
+                    const newPos = Math.min(95, current + move); // %
+                    r.el.style.left = `${newPos}%`;
+                });
 
-                const payout = result.win ? bet * result.multiplier : 0;
-                if (payout > 0) window.MoonKat.updateBalance(payout);
+                if (steps >= 10) { // Race finish logic
+                    clearInterval(interval);
+                    
+                    const winner = racers[Math.floor(Math.random() * racers.length)];
+                    // Visually snap winner to end
+                    racerEls.find(r => r.name === winner).el.style.left = '95%';
+                    
+                    const choice = this.selectedChoice;
+                    const result = { win: winner === choice, multiplier: 3.8, message: `Winner: ${winner}` };
 
-                const xpGain = Math.floor(Math.max(10, bet * 0.08));
-                window.MoonKat.addXp(xpGain);
+                    const payout = result.win ? bet * result.multiplier : 0;
+                    if (payout > 0) this.updateCurrency(payout);
 
-                if(window.MoonKat.incrementStat) {
-                    window.MoonKat.incrementStat('gamesPlayed');
-                    window.MoonKat.incrementStat('totalBets');
-                    if(result.win) {
-                        window.MoonKat.incrementStat('wins');
-                        window.MoonKat.incrementStat('totalWon', payout);
-                    } else {
-                        window.MoonKat.incrementStat('totalLost', bet);
+                    const xpGain = Math.floor(Math.max(10, bet * 0.1));
+                    window.MoonKat.addXp(xpGain);
+
+                    // Stats logic
+                    if(window.MoonKat.state.user.stats) {
+                        window.MoonKat.state.user.stats.gamesPlayed++;
+                        window.MoonKat.state.user.stats.totalBets += bet;
+                        if(result.win) {
+                            window.MoonKat.state.user.stats.wins = (window.MoonKat.state.user.stats.wins || 0) + 1;
+                            window.MoonKat.state.user.stats.totalWon += payout;
+                        } else {
+                            window.MoonKat.state.user.stats.totalLost += bet;
+                        }
                     }
-                }
 
-                this.log.innerHTML = `${result.message} ${result.win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
-                this.playBtn.disabled = false;
-            }, 1000);
+                    this.log.innerHTML = `${result.message} ${result.win ? `<span style="color:var(--accent-success)">+${payout}</span>` : `<span style="color:var(--accent-danger)">-${bet}</span>`} (+${xpGain} XP)`;
+                    this.playBtn.disabled = false;
+                }
+            }, 200);
         }
 
         destroy() {

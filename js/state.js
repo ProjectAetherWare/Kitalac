@@ -12,7 +12,7 @@ window.MoonKat.TIERS = [
 ];
 
 // State
-window.MoonKat.state = {
+    window.MoonKat.state = {
     user: {
         username: "Guest",
         bio: "Just a Kitalac player.",
@@ -20,6 +20,7 @@ window.MoonKat.state = {
         premiumBalance: 0,
         inventory: {},
         assets: [],
+        transactions: [], // History
         xp: 0,
         tierIndex: 0,
         unlockedGames: ["crash", "roulette", "coinflip", "dice", "hilo"],
@@ -35,6 +36,7 @@ window.MoonKat.state = {
         lastDailyBonus: 0
     },
     coins: [],
+    listings: [], // Active User Listings
     stocks: [
         { ticker: 'APL', name: 'Applex', price: 150.00, history: [], volatility: 0.02 },
         { ticker: 'GGL', name: 'Googol', price: 2800.00, history: [], volatility: 0.015 },
@@ -53,7 +55,8 @@ window.MoonKat.state = {
     bots: [],
     settings: {
         sound: true,
-        lowSpec: false
+        lowSpec: false,
+        accentColor: '#ff9f1c' // Default Orange
     },
     mode: 'offline' // 'offline' or 'online'
 };

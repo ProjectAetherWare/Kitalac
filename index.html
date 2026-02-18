@@ -317,6 +317,17 @@
                         </div>
 
                         <div class="setting-group">
+                            <h3>Appearance</h3>
+                            <div style="margin-top:15px;">
+                                <label class="setting-label">Accent Color</label>
+                                <div style="display:flex; gap:10px; align-items:center;">
+                                    <input type="color" id="setting-accent" class="setting-input" style="width:60px; padding:5px; height:50px;" onchange="app.setAccentColor(this.value); if(window.MoonKat && MoonKat.Saves) MoonKat.Saves.saveCurrent();">
+                                    <span style="font-size:0.9rem; color:var(--text-secondary);">Pick a custom theme color.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
                             <h3>Performance</h3>
                             <div style="margin-top:10px;">
                                 <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
@@ -463,6 +474,33 @@
     <script src="js/games/safe.js"></script>
     <script src="js/games/binary.js"></script>
     <script src="js/games/revolver.js"></script>
+    
+    <!-- Expansion -->
+    <script src="js/games/slide.js"></script>
+    <script src="js/games/stairs.js"></script>
+    <script src="js/games/diamonds.js"></script>
+    <script src="js/games/dragontower.js"></script>
+    <script src="js/games/keno40.js"></script>
+    <script src="js/games/videopoker.js"></script>
+    <script src="js/games/bjsurrender.js"></script>
+    <script src="js/games/doublewheel.js"></script>
+    <script src="js/games/tripleclover.js"></script>
+    <script src="js/games/cyberdice.js"></script>
+    <script src="js/games/pachinko.js"></script>
+    <script src="js/games/marblerace.js"></script>
+    <script src="js/games/cardmatch.js"></script>
+    <script src="js/games/higherlower.js"></script>
+    <script src="js/games/colorpred.js"></script>
+    <script src="js/games/speedbaccarat.js"></script>
+    <script src="js/games/war.js"></script>
+    <script src="js/games/reddog.js"></script>
+    <script src="js/games/sicbo.js"></script>
+    <script src="js/games/andarbahar.js"></script>
+    <script src="js/games/teenpatti.js"></script>
+    <script src="js/games/fantan.js"></script>
+    <script src="js/games/bullbear.js"></script>
+    <script src="js/games/runebound.js"></script>
+    <script src="js/games/ethercrash.js"></script>
 
     <script src="js/games/arena.js"></script>
     <script src="js/main.js"></script>

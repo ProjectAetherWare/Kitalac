@@ -2,41 +2,100 @@
     window.MoonKat = window.MoonKat || {};
 
     class GraphGame {
-        constructor(containerId, gameData) {
+        constructor(containerId, currency = 'cash') {
             this.container = document.getElementById(containerId);
-            this.gameData = gameData || { name: "Trade Graph", icon: "fa-chart-line", desc: "Predict stock movement.", options: ["up", "down"], cost: 35 };
+            this.currency = currency;
             this.setupUI();
         }
 
         setupUI() {
+            const currencyLabel = this.currency === 'gems' ? 'GEMS' : 'CASH';
+            const step = this.currency === 'gems' ? 1 : 10;
+            const min = this.currency === 'gems' ? 1 : 10;
+            const defaultBet = this.currency === 'gems' ? 5 : 35;
+
             this.container.innerHTML = `
                 <div class="game-panel">
-                    <h2><i class="fas ${this.gameData.icon}"></i> ${this.gameData.name}</h2>
-                    <p class="section-subtitle">${this.gameData.desc}</p>
+                    <h2><i class="fas fa-chart-line"></i> Trade Graph</h2>
+                    <p class="section-subtitle">Predict if the next tick is UP or DOWN.</p>
                     
-                    <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
-                        <div class="graph-line"><i class="fas fa-chart-line fa-3x"></i></div>
+                    <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <canvas id="graph-canvas" width="300" height="150" style="background: rgba(0,0,0,0.3); border-radius: 4px;"></canvas>
+                        <div id="graph-result" style="margin-top: 10px; font-weight: bold; font-size: 1.2rem; min-height: 24px;"></div>
                     </div>
 
                     <div class="game-controls">
-                        <input id="game-bet" class="game-input" type="number" value="${this.gameData.cost || 35}" min="1" step="10" placeholder="Bet Amount" />
-                        <select id="game-choice" class="game-select">
-                            <option value="up">UP 📈</option>
-                            <option value="down">DOWN 📉</option>
-                        </select>
-                        <button id="game-play-btn" class="game-btn">TRADE</button>
+                        <div class="control-group">
+                            <label>Bet Amount (${currencyLabel})</label>
+                            <input id="game-bet" class="game-input" type="number" value="${defaultBet}" min="${min}" step="${step}" />
+                        </div>
+                        <div class="control-group">
+                            <label>Prediction</label>
+                            <div class="btn-group-row">
+                                <button class="game-btn-opt active" data-choice="up" style="color: var(--accent-success);"><i class="fas fa-arrow-trend-up"></i> UP</button>
+                                <button class="game-btn-opt" data-choice="down" style="color: var(--accent-danger);"><i class="fas fa-arrow-trend-down"></i> DOWN</button>
+                            </div>
+                        </div>
+                        <button id="game-play-btn" class="game-btn action-btn">TRADE</button>
                     </div>
-                    <div id="game-log" class="game-log">Up or Down?</div>
+                    <div id="game-log" class="game-log">Make a prediction!</div>
                 </div>
             `;
 
-            this.visContainer = this.container.querySelector("#game-visuals-container");
+            this.canvas = this.container.querySelector("#graph-canvas");
+            this.ctx = this.canvas.getContext('2d');
+            this.resultDiv = this.container.querySelector("#graph-result");
             this.log = this.container.querySelector("#game-log");
             this.playBtn = this.container.querySelector("#game-play-btn");
             this.betInput = this.container.querySelector("#game-bet");
-            this.choiceInput = this.container.querySelector("#game-choice");
+            this.optionBtns = this.container.querySelectorAll(".game-btn-opt");
+            
+            this.selectedChoice = 'up'; // Default
+
+            this.optionBtns.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    this.optionBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.selectedChoice = btn.getAttribute('data-choice');
+                });
+            });
 
             this.playBtn.addEventListener("click", () => this.play());
+            
+            // Draw initial static line
+            this.drawGraph([50, 60, 55, 70, 65, 80, 75, 90]);
+        }
+
+        drawGraph(points) {
+            const ctx = this.ctx;
+            const w = this.canvas.width;
+            const h = this.canvas.height;
+            
+            ctx.clearRect(0, 0, w, h);
+            ctx.beginPath();
+            ctx.strokeStyle = '#2ecc71';
+            ctx.lineWidth = 2;
+            
+            const step = w / (points.length - 1);
+            
+            points.forEach((p, i) => {
+                const x = i * step;
+                const y = h - (p / 100 * h); // Scale 0-100 to canvas height
+                if(i===0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        updateCurrency(amount) {
+            if (this.currency === 'gems') {
+                if (window.MoonKat.state.user.premiumBalance + amount < 0) return false;
+                window.MoonKat.state.user.premiumBalance += amount;
+            } else {
+                if (!window.MoonKat.updateBalance(amount)) return false;
+            }
+            window.MoonKat.renderUserStats();
+            return true;
         }
 
         play() {
@@ -45,52 +104,70 @@
                  this.log.innerText = "Invalid Bet";
                  return;
             }
-            if (!window.MoonKat.updateBalance(-bet)) {
-                 this.log.innerText = "Insufficient Funds";
+
+            if (!this.updateCurrency(-bet)) {
+                 this.log.innerText = `Insufficient ${this.currency === 'gems' ? 'Gems' : 'Funds'}`;
                  return;
             }
 
             this.playBtn.disabled = true;
             this.log.innerHTML = "Trading...";
+            this.resultDiv.innerText = "";
             
-            // Animation
-            this.visContainer.style.opacity = '0.5';
-            this.visContainer.style.transform = 'scale(0.95)';
+            // Generate graph data
+            let points = [50];
+            for(let i=0; i<8; i++) {
+                let last = points[points.length-1];
+                points.push(Math.max(10, Math.min(90, last + (Math.random()*30 - 15))));
+            }
+            this.drawGraph(points);
 
-            setTimeout(() => {
-                const choice = this.choiceInput.value;
-                const up = Math.random() > 0.5;
-                const win = (choice === 'up' && up) || (choice === 'down' && !up);
-                const result = { win, multiplier: 1.9, message: up ? "Graph went UP 📈" : "Graph went DOWN 📉", data: { up } };
+            // Animate final tick
+            let step = 0;
+            const animateInt = setInterval(() => {
+                let last = points[points.length-1];
+                const finalP = Math.max(10, Math.min(90, last + (Math.random()*40 - 20)));
+                const newPoints = [...points, finalP];
+                this.drawGraph(newPoints);
+                step++;
                 
-                // End Animation
-                this.visContainer.style.opacity = '1';
-                this.visContainer.style.transform = 'scale(1)';
-                
-                this.visContainer.innerHTML = up 
-                    ? `<div style="color:var(--accent-success); font-size:3rem; font-weight:bold; animation: pulse 0.5s;"><i class="fas fa-arrow-trend-up"></i></div>`
-                    : `<div style="color:var(--accent-danger); font-size:3rem; font-weight:bold; animation: shake 0.5s;"><i class="fas fa-arrow-trend-down"></i></div>`;
-
-                const payout = win ? bet * 1.9 : 0;
-                if (payout > 0) window.MoonKat.updateBalance(payout);
-
-                const xpGain = Math.floor(Math.max(10, bet * 0.08));
-                window.MoonKat.addXp(xpGain);
-
-                if(window.MoonKat.incrementStat) {
-                    window.MoonKat.incrementStat('gamesPlayed');
-                    window.MoonKat.incrementStat('totalBets');
-                    if(result.win) {
-                        window.MoonKat.incrementStat('wins');
-                        window.MoonKat.incrementStat('totalWon', payout);
-                    } else {
-                        window.MoonKat.incrementStat('totalLost', bet);
-                    }
+                if(step > 5) { // Stop
+                    clearInterval(animateInt);
+                    this.finishPlay(bet, points[points.length-1], finalP);
+                } else {
+                    points.push(finalP);
                 }
+            }, 200);
+        }
 
-                this.log.innerHTML = `${result.message} ${result.win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
-                this.playBtn.disabled = false;
-            }, 1000);
+        finishPlay(bet, lastVal, finalVal) {
+            const isUp = finalVal > lastVal;
+            const won = (this.selectedChoice === 'up' && isUp) || (this.selectedChoice === 'down' && !isUp);
+            const multiplier = 1.9;
+
+            const payout = won ? bet * multiplier : 0;
+            if (payout > 0) this.updateCurrency(payout);
+
+            const xpGain = Math.floor(Math.max(10, bet * 0.1));
+            window.MoonKat.addXp(xpGain);
+
+            if(window.MoonKat.state.user.stats) {
+                window.MoonKat.state.user.stats.gamesPlayed++;
+                window.MoonKat.state.user.stats.totalBets += bet;
+                if(won) {
+                    window.MoonKat.state.user.stats.wins = (window.MoonKat.state.user.stats.wins || 0) + 1;
+                    window.MoonKat.state.user.stats.totalWon += payout;
+                } else {
+                    window.MoonKat.state.user.stats.totalLost += bet;
+                }
+            }
+            
+            this.resultDiv.innerHTML = isUp 
+                ? `<span style="color:var(--accent-success)">UP (+${(finalVal-lastVal).toFixed(1)})</span>` 
+                : `<span style="color:var(--accent-danger)">DOWN (${(finalVal-lastVal).toFixed(1)})</span>`;
+
+            this.log.innerHTML = `${won ? "PROFIT!" : "LOSS!"} ${won ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
+            this.playBtn.disabled = false;
         }
 
         destroy() {

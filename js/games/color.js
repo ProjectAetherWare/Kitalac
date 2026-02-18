@@ -2,46 +2,75 @@
     window.MoonKat = window.MoonKat || {};
 
     class ColorGame {
-        constructor(containerId, gameData) {
+        constructor(containerId, currency = 'cash') {
             this.container = document.getElementById(containerId);
-            this.gameData = gameData || { name: "Chroma Key", icon: "fa-palette", desc: "Pick the next color.", options: ["red", "blue", "yellow"], cost: 15 };
+            this.currency = currency;
             this.setupUI();
         }
 
         setupUI() {
+            const currencyLabel = this.currency === 'gems' ? 'GEMS' : 'CASH';
+            const step = this.currency === 'gems' ? 1 : 10;
+            const min = this.currency === 'gems' ? 1 : 10;
+            const defaultBet = this.currency === 'gems' ? 5 : 15;
+
             this.container.innerHTML = `
                 <div class="game-panel">
-                    <h2><i class="fas ${this.gameData.icon}"></i> ${this.gameData.name}</h2>
-                    <p class="section-subtitle">${this.gameData.desc}</p>
+                    <h2><i class="fas fa-palette"></i> Chroma Key</h2>
+                    <p class="section-subtitle">Predict the color. (Red 2x, Blue 2x, Yellow 5x)</p>
                     
                     <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
-                        <div class="color-wheel" style="display:flex; gap:10px;">
-                            <div class="c-red" style="width:40px; height:40px; background:red; border-radius:50%;"></div>
-                            <div class="c-blue" style="width:40px; height:40px; background:blue; border-radius:50%;"></div>
-                            <div class="c-yellow" style="width:40px; height:40px; background:yellow; border-radius:50%;"></div>
-                        </div>
+                        <div class="color-box" style="width: 120px; height: 120px; background: #333; border-radius: 12px; transition: background 0.5s;"></div>
                     </div>
 
                     <div class="game-controls">
-                        <input id="game-bet" class="game-input" type="number" value="${this.gameData.cost || 15}" min="1" step="10" placeholder="Bet Amount" />
-                        <select id="game-choice" class="game-select">
-                            <option value="red">RED</option>
-                            <option value="blue">BLUE</option>
-                            <option value="yellow">YELLOW</option>
-                        </select>
-                        <button id="game-play-btn" class="game-btn">SPIN</button>
+                        <div class="control-group">
+                            <label>Bet Amount (${currencyLabel})</label>
+                            <input id="game-bet" class="game-input" type="number" value="${defaultBet}" min="${min}" step="${step}" />
+                        </div>
+                        <div class="control-group">
+                            <label>Select Color</label>
+                            <div class="btn-group-row">
+                                <button class="game-btn-opt active" data-choice="red" style="border-bottom: 3px solid #e74c3c;">Red (2x)</button>
+                                <button class="game-btn-opt" data-choice="blue" style="border-bottom: 3px solid #3498db;">Blue (2x)</button>
+                                <button class="game-btn-opt" data-choice="yellow" style="border-bottom: 3px solid #f1c40f;">Yellow (5x)</button>
+                            </div>
+                        </div>
+                        <button id="game-play-btn" class="game-btn action-btn">PLAY</button>
                     </div>
                     <div id="game-log" class="game-log">Pick a color!</div>
                 </div>
             `;
 
             this.visContainer = this.container.querySelector("#game-visuals-container");
+            this.colorBox = this.container.querySelector(".color-box");
             this.log = this.container.querySelector("#game-log");
             this.playBtn = this.container.querySelector("#game-play-btn");
             this.betInput = this.container.querySelector("#game-bet");
-            this.choiceInput = this.container.querySelector("#game-choice");
+            this.optionBtns = this.container.querySelectorAll(".game-btn-opt");
+            
+            this.selectedChoice = 'red'; // Default
+
+            this.optionBtns.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    this.optionBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.selectedChoice = btn.getAttribute('data-choice');
+                });
+            });
 
             this.playBtn.addEventListener("click", () => this.play());
+        }
+
+        updateCurrency(amount) {
+            if (this.currency === 'gems') {
+                if (window.MoonKat.state.user.premiumBalance + amount < 0) return false;
+                window.MoonKat.state.user.premiumBalance += amount;
+            } else {
+                if (!window.MoonKat.updateBalance(amount)) return false;
+            }
+            window.MoonKat.renderUserStats();
+            return true;
         }
 
         play() {
@@ -50,8 +79,9 @@
                  this.log.innerText = "Invalid Bet";
                  return;
             }
-            if (!window.MoonKat.updateBalance(-bet)) {
-                 this.log.innerText = "Insufficient Funds";
+
+            if (!this.updateCurrency(-bet)) {
+                 this.log.innerText = `Insufficient ${this.currency === 'gems' ? 'Gems' : 'Funds'}`;
                  return;
             }
 
@@ -59,42 +89,55 @@
             this.log.innerHTML = "Spinning...";
             
             // Animation
-            this.visContainer.style.opacity = '0.5';
-            this.visContainer.style.transform = 'scale(0.95)';
+            let count = 0;
+            const colors = ['#e74c3c', '#3498db', '#f1c40f']; // Red, Blue, Yellow
+            const interval = setInterval(() => {
+                this.colorBox.style.background = colors[count % 3];
+                count++;
+            }, 100);
 
             setTimeout(() => {
-                const choice = this.choiceInput.value;
-                const c = ["red", "blue", "yellow"][Math.floor(Math.random()*3)];
-                const win = c === choice;
-                const result = { win, multiplier: 2.9, message: `Color: ${c.toUpperCase()}`, data: { c } };
+                clearInterval(interval);
                 
-                // End Animation
-                this.visContainer.style.opacity = '1';
-                this.visContainer.style.transform = 'scale(1)';
+                // Probabilities: Red 45%, Blue 45%, Yellow 10%
+                const rand = Math.random();
+                let result = 'red';
+                let multiplier = 2;
                 
-                let colorHex = c === 'red' ? '#e74c3c' : (c === 'blue' ? '#3498db' : '#f1c40f');
-                this.visContainer.innerHTML = `<div style="width:100px; height:100px; background:${colorHex}; border-radius:50%; box-shadow:0 0 20px ${colorHex}; animation: pulse 0.5s;"></div>`;
+                if (rand < 0.45) { result = 'red'; multiplier = 2; }
+                else if (rand < 0.90) { result = 'blue'; multiplier = 2; }
+                else { result = 'yellow'; multiplier = 5; }
 
-                const payout = win ? bet * 2.9 : 0;
-                if (payout > 0) window.MoonKat.updateBalance(payout);
+                const colorMap = {
+                    'red': '#e74c3c',
+                    'blue': '#3498db',
+                    'yellow': '#f1c40f'
+                };
 
-                const xpGain = Math.floor(Math.max(10, bet * 0.08));
+                this.colorBox.style.background = colorMap[result];
+                
+                const win = this.selectedChoice === result;
+                const payout = win ? bet * multiplier : 0;
+
+                if (payout > 0) this.updateCurrency(payout);
+
+                const xpGain = Math.floor(Math.max(10, bet * 0.1));
                 window.MoonKat.addXp(xpGain);
 
-                if(window.MoonKat.incrementStat) {
-                    window.MoonKat.incrementStat('gamesPlayed');
-                    window.MoonKat.incrementStat('totalBets');
-                    if(result.win) {
-                        window.MoonKat.incrementStat('wins');
-                        window.MoonKat.incrementStat('totalWon', payout);
+                if(window.MoonKat.state.user.stats) {
+                    window.MoonKat.state.user.stats.gamesPlayed++;
+                    window.MoonKat.state.user.stats.totalBets += bet;
+                    if(win) {
+                        window.MoonKat.state.user.stats.wins = (window.MoonKat.state.user.stats.wins || 0) + 1;
+                        window.MoonKat.state.user.stats.totalWon += payout;
                     } else {
-                        window.MoonKat.incrementStat('totalLost', bet);
+                        window.MoonKat.state.user.stats.totalLost += bet;
                     }
                 }
 
-                this.log.innerHTML = `${result.message} ${result.win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
+                this.log.innerHTML = `${win ? "WIN!" : "LOSE"} Result: ${result.toUpperCase()} ${win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
                 this.playBtn.disabled = false;
-            }, 1000);
+            }, 1500);
         }
 
         destroy() {

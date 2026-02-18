@@ -166,17 +166,83 @@
         alert(`Purchased ${asset.name}!`);
     }
 
+    MK.listAsset = function(id) {
+        const index = MK.state.user.assets.findIndex(a => a.id === id);
+        if (index === -1) return;
+        const asset = MK.state.user.assets[index];
+        
+        const priceStr = prompt(`List ${asset.name} for Sale?\nEstimated Value: $${asset.price.toLocaleString()}\nEnter Price:`, asset.price);
+        if (!priceStr) return;
+        
+        const price = parseFloat(priceStr);
+        if (!Number.isFinite(price) || price <= 0) return alert("Invalid Price");
+        
+        // Move to Listings
+        MK.state.user.assets.splice(index, 1);
+        if (!MK.state.listings) MK.state.listings = [];
+        MK.state.listings.push({
+            id: asset.id,
+            asset: asset,
+            price: price,
+            seller: 'user',
+            listedAt: Date.now()
+        });
+        
+        if (!MK.state.user.transactions) MK.state.user.transactions = [];
+        MK.state.user.transactions.unshift({
+            type: 'LIST',
+            item: asset.name,
+            amount: price,
+            date: Date.now()
+        });
+        
+        if (window.app && window.app.showToast) window.app.showToast(`Listed ${asset.name} for $${price.toLocaleString()}`, 'info');
+        
+        // Refresh
+        if (window.app.currentPage === 'assets') MK.renderAssets();
+        if (window.app.currentPage === 'portfolio') window.app.goTo('portfolio');
+    };
+
+    MK.cancelListing = function(id) {
+        if (!MK.state.listings) return;
+        const index = MK.state.listings.findIndex(l => l.id === id && l.seller === 'user');
+        if (index === -1) return;
+        
+        const listing = MK.state.listings[index];
+        
+        // Return to assets
+        MK.state.user.assets.push(listing.asset);
+        MK.state.listings.splice(index, 1);
+        
+        if (window.app && window.app.showToast) window.app.showToast(`Cancelled listing for ${listing.asset.name}`, 'info');
+        
+        if (window.app.currentPage === 'portfolio') window.app.goTo('portfolio');
+    };
+
     MK.sellAsset = function(id) {
+        // Quick sell logic kept for convenience, but listing preferred
         const index = MK.state.user.assets.findIndex(a => a.id === id);
         if (index === -1) return;
         const asset = MK.state.user.assets[index];
         
         const sellPrice = Math.floor(asset.price * 0.8); // 20% depreciation instant
         
-        if (confirm(`Sell ${asset.name} for $${sellPrice.toLocaleString()}? (Premium assets sell for cash)`)) {
+        if (confirm(`Quick Sell ${asset.name} for $${sellPrice.toLocaleString()} (80% Value)?\nOr click Cancel to List on Market.`)) {
             MK.updateBalance(sellPrice);
             MK.state.user.assets.splice(index, 1);
+            
+            if (!MK.state.user.transactions) MK.state.user.transactions = [];
+            MK.state.user.transactions.unshift({
+                type: 'QUICK_SELL',
+                item: asset.name,
+                amount: sellPrice,
+                date: Date.now()
+            });
+            
             MK.renderAssets();
+        } else {
+            // Redirect to list
+            MK.listAsset(id);
         }
     };
 

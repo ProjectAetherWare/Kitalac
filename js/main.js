@@ -33,6 +33,10 @@
             if (MK.state.settings && MK.state.settings.lowSpec) {
                 document.body.classList.add('low-spec');
             }
+            // Apply Accent Color
+            if (MK.state.settings && MK.state.settings.accentColor) {
+                this.setAccentColor(MK.state.settings.accentColor);
+            }
 
             this.bindArenaCards();
             this.goTo("market");
@@ -301,6 +305,28 @@
             MK.state.user.username = value;
             MK.renderUserStats();
             alert("Username updated.");
+        },
+
+        setAccentColor(color) {
+            document.documentElement.style.setProperty('--accent-primary', color);
+            // Calculate glow (with opacity)
+            // Simple hex to rgba for glow
+            let r=0, g=0, b=0;
+            if(color.length == 4){
+                r = "0x" + color[1] + color[1];
+                g = "0x" + color[2] + color[2];
+                b = "0x" + color[3] + color[3];
+            } else if (color.length == 7){
+                r = "0x" + color[1] + color[2];
+                g = "0x" + color[3] + color[4];
+                b = "0x" + color[5] + color[6];
+            }
+            document.documentElement.style.setProperty('--accent-glow', `rgba(${+r},${+g},${+b},0.4)`);
+            
+            if(MK.state.settings) MK.state.settings.accentColor = color;
+            // Update input if exists
+            const picker = document.getElementById('setting-accent');
+            if(picker) picker.value = color;
         },
 
         toggleLowSpec() {

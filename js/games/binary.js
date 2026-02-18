@@ -2,41 +2,74 @@
     window.MoonKat = window.MoonKat || {};
 
     class BinaryGame {
-        constructor(containerId, gameData) {
+        constructor(containerId, currency = 'cash') {
             this.container = document.getElementById(containerId);
-            this.gameData = gameData || { name: "Binary Option", icon: "fa-network-wired", desc: "0 or 1 outcome.", options: ["0", "1"], cost: 30 };
+            this.currency = currency;
             this.setupUI();
         }
 
         setupUI() {
+            const currencyLabel = this.currency === 'gems' ? 'GEMS' : 'CASH';
+            const step = this.currency === 'gems' ? 1 : 10;
+            const min = this.currency === 'gems' ? 1 : 10;
+            const defaultBet = this.currency === 'gems' ? 5 : 30;
+
             this.container.innerHTML = `
                 <div class="game-panel">
-                    <h2><i class="fas ${this.gameData.icon}"></i> ${this.gameData.name}</h2>
-                    <p class="section-subtitle">${this.gameData.desc}</p>
+                    <h2><i class="fas fa-network-wired"></i> Binary Option</h2>
+                    <p class="section-subtitle">0 or 1. 50/50 Chance.</p>
                     
                     <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
-                        <div class="binary-stream" style="font-family:monospace; font-size:2rem; color:var(--accent-primary);">010110...</div>
+                        <div class="binary-display" style="font-family: 'Courier New', monospace; font-size: 5rem; font-weight: bold; color: var(--accent-primary);">?</div>
                     </div>
 
                     <div class="game-controls">
-                        <input id="game-bet" class="game-input" type="number" value="${this.gameData.cost || 30}" min="1" step="10" placeholder="Bet Amount" />
-                        <select id="game-choice" class="game-select">
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                        </select>
-                        <button id="game-play-btn" class="game-btn">EXECUTE</button>
+                        <div class="control-group">
+                            <label>Bet Amount (${currencyLabel})</label>
+                            <input id="game-bet" class="game-input" type="number" value="${defaultBet}" min="${min}" step="${step}" />
+                        </div>
+                        <div class="control-group">
+                            <label>Prediction</label>
+                            <div class="btn-group-row">
+                                <button class="game-btn-opt active" data-choice="0">0</button>
+                                <button class="game-btn-opt" data-choice="1">1</button>
+                            </div>
+                        </div>
+                        <button id="game-play-btn" class="game-btn action-btn">EXECUTE</button>
                     </div>
-                    <div id="game-log" class="game-log">0 or 1?</div>
+                    <div id="game-log" class="game-log">Select 0 or 1!</div>
                 </div>
             `;
 
             this.visContainer = this.container.querySelector("#game-visuals-container");
+            this.display = this.container.querySelector(".binary-display");
             this.log = this.container.querySelector("#game-log");
             this.playBtn = this.container.querySelector("#game-play-btn");
             this.betInput = this.container.querySelector("#game-bet");
-            this.choiceInput = this.container.querySelector("#game-choice");
+            this.optionBtns = this.container.querySelectorAll(".game-btn-opt");
+            
+            this.selectedChoice = '0'; // Default
+
+            this.optionBtns.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    this.optionBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.selectedChoice = btn.getAttribute('data-choice');
+                });
+            });
 
             this.playBtn.addEventListener("click", () => this.play());
+        }
+
+        updateCurrency(amount) {
+            if (this.currency === 'gems') {
+                if (window.MoonKat.state.user.premiumBalance + amount < 0) return false;
+                window.MoonKat.state.user.premiumBalance += amount;
+            } else {
+                if (!window.MoonKat.updateBalance(amount)) return false;
+            }
+            window.MoonKat.renderUserStats();
+            return true;
         }
 
         play() {
@@ -45,56 +78,48 @@
                  this.log.innerText = "Invalid Bet";
                  return;
             }
-            if (!window.MoonKat.updateBalance(-bet)) {
-                 this.log.innerText = "Insufficient Funds";
+
+            if (!this.updateCurrency(-bet)) {
+                 this.log.innerText = `Insufficient ${this.currency === 'gems' ? 'Gems' : 'Funds'}`;
                  return;
             }
 
             this.playBtn.disabled = true;
-            this.log.innerHTML = "Processing...";
+            this.log.innerHTML = "Computing...";
             
             // Animation
-            this.visContainer.style.opacity = '0.5';
-            
-            let stream = "";
-            let interval = setInterval(() => {
-                stream = Math.random() > 0.5 ? "1" : "0";
-                this.visContainer.innerText = stream + Math.floor(Math.random()*100000);
-            }, 100);
+            const int = setInterval(() => {
+                this.display.innerText = Math.random() > 0.5 ? '1' : '0';
+            }, 50);
 
             setTimeout(() => {
-                clearInterval(interval);
-                this.visContainer.style.opacity = '1';
+                clearInterval(int);
+                const result = Math.random() > 0.5 ? '1' : '0';
+                this.display.innerText = result;
                 
-                const choice = this.choiceInput.value;
-                const bit = Math.random() > 0.5 ? "1" : "0";
-                const win = bit === choice;
-                const result = { win, multiplier: 1.9, message: `Bit: ${bit}`, data: { bit } };
-                
-                this.visContainer.innerHTML = win 
-                    ? `<div style="color:var(--accent-success); font-size:6rem; font-weight:bold; animation: pulse 0.5s;">${bit}</div>`
-                    : `<div style="color:var(--accent-danger); font-size:6rem; font-weight:bold; animation: shake 0.5s;">${bit}</div>`;
+                const win = this.selectedChoice === result;
+                const multiplier = 1.95;
+                const payout = win ? bet * multiplier : 0;
 
-                const payout = win ? bet * 1.9 : 0;
-                if (payout > 0) window.MoonKat.updateBalance(payout);
+                if (payout > 0) this.updateCurrency(payout);
 
-                const xpGain = Math.floor(Math.max(10, bet * 0.08));
+                const xpGain = Math.floor(Math.max(10, bet * 0.1));
                 window.MoonKat.addXp(xpGain);
 
-                if(window.MoonKat.incrementStat) {
-                    window.MoonKat.incrementStat('gamesPlayed');
-                    window.MoonKat.incrementStat('totalBets');
-                    if(result.win) {
-                        window.MoonKat.incrementStat('wins');
-                        window.MoonKat.incrementStat('totalWon', payout);
+                if(window.MoonKat.state.user.stats) {
+                    window.MoonKat.state.user.stats.gamesPlayed++;
+                    window.MoonKat.state.user.stats.totalBets += bet;
+                    if(win) {
+                        window.MoonKat.state.user.stats.wins = (window.MoonKat.state.user.stats.wins || 0) + 1;
+                        window.MoonKat.state.user.stats.totalWon += payout;
                     } else {
-                        window.MoonKat.incrementStat('totalLost', bet);
+                        window.MoonKat.state.user.stats.totalLost += bet;
                     }
                 }
 
-                this.log.innerHTML = `${result.message} ${result.win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
+                this.log.innerHTML = `${win ? "WIN!" : "LOSE"} Result: ${result} ${win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
                 this.playBtn.disabled = false;
-            }, 1000);
+            }, 800);
         }
 
         destroy() {

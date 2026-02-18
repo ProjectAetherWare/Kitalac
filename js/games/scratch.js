@@ -2,27 +2,39 @@
     window.MoonKat = window.MoonKat || {};
 
     class ScratchGame {
-        constructor(containerId, gameData) {
+        constructor(containerId, currency = 'cash') {
             this.container = document.getElementById(containerId);
-            this.gameData = gameData || { name: "Lucky Scratch", icon: "fa-ticket-alt", desc: "Match 3 symbols.", cost: 20 };
+            this.currency = currency;
             this.setupUI();
         }
 
         setupUI() {
+            const currencyLabel = this.currency === 'gems' ? 'GEMS' : 'CASH';
+            const step = this.currency === 'gems' ? 1 : 10;
+            const min = this.currency === 'gems' ? 1 : 10;
+            const defaultBet = this.currency === 'gems' ? 5 : 20;
+
             this.container.innerHTML = `
                 <div class="game-panel">
-                    <h2><i class="fas ${this.gameData.icon}"></i> ${this.gameData.name}</h2>
-                    <p class="section-subtitle">${this.gameData.desc}</p>
+                    <h2><i class="fas fa-ticket-alt"></i> Lucky Scratch</h2>
+                    <p class="section-subtitle">Match 3 symbols to win 5x!</p>
                     
                     <div class="game-visuals" id="game-visuals-container" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
-                        <div class="scratch-card" style="font-size:3rem; letter-spacing:5px;">▒▒▒▒▒▒</div>
+                        <div class="scratch-card-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                            <div class="scratch-cell" style="width: 80px; height: 80px; background: #444; display: flex; align-items: center; justify-content: center; font-size: 2rem; border-radius: 5px; cursor: pointer;">?</div>
+                            <div class="scratch-cell" style="width: 80px; height: 80px; background: #444; display: flex; align-items: center; justify-content: center; font-size: 2rem; border-radius: 5px; cursor: pointer;">?</div>
+                            <div class="scratch-cell" style="width: 80px; height: 80px; background: #444; display: flex; align-items: center; justify-content: center; font-size: 2rem; border-radius: 5px; cursor: pointer;">?</div>
+                        </div>
                     </div>
 
                     <div class="game-controls">
-                        <input id="game-bet" class="game-input" type="number" value="${this.gameData.cost || 20}" min="1" step="10" placeholder="Bet Amount" />
-                        <button id="game-play-btn" class="game-btn">SCRATCH</button>
+                        <div class="control-group">
+                            <label>Ticket Cost (${currencyLabel})</label>
+                            <input id="game-bet" class="game-input" type="number" value="${defaultBet}" min="${min}" step="${step}" />
+                        </div>
+                        <button id="game-play-btn" class="game-btn action-btn">BUY TICKET & SCRATCH</button>
                     </div>
-                    <div id="game-log" class="game-log">Match 3 to win!</div>
+                    <div id="game-log" class="game-log">Buy a ticket to play!</div>
                 </div>
             `;
 
@@ -30,8 +42,20 @@
             this.log = this.container.querySelector("#game-log");
             this.playBtn = this.container.querySelector("#game-play-btn");
             this.betInput = this.container.querySelector("#game-bet");
+            this.cells = this.container.querySelectorAll(".scratch-cell");
 
             this.playBtn.addEventListener("click", () => this.play());
+        }
+
+        updateCurrency(amount) {
+            if (this.currency === 'gems') {
+                if (window.MoonKat.state.user.premiumBalance + amount < 0) return false;
+                window.MoonKat.state.user.premiumBalance += amount;
+            } else {
+                if (!window.MoonKat.updateBalance(amount)) return false;
+            }
+            window.MoonKat.renderUserStats();
+            return true;
         }
 
         play() {
@@ -40,50 +64,80 @@
                  this.log.innerText = "Invalid Bet";
                  return;
             }
-            if (!window.MoonKat.updateBalance(-bet)) {
-                 this.log.innerText = "Insufficient Funds";
+
+            if (!this.updateCurrency(-bet)) {
+                 this.log.innerText = `Insufficient ${this.currency === 'gems' ? 'Gems' : 'Funds'}`;
                  return;
             }
 
             this.playBtn.disabled = true;
             this.log.innerHTML = "Scratching...";
             
-            // Animation
-            this.visContainer.style.opacity = '0.5';
-            this.visContainer.style.transform = 'scale(0.95)';
+            // Reset Cells
+            this.cells.forEach(cell => {
+                cell.innerHTML = '<i class="fas fa-question" style="opacity:0.2;"></i>';
+                cell.style.background = '#444';
+            });
 
-            setTimeout(() => {
-                const matches = Math.random() < 0.25;
-                const result = { win: matches, multiplier: 5, message: matches ? "3 Matches!" : "No match.", data: {} };
-                
-                // End Animation
-                this.visContainer.style.opacity = '1';
-                this.visContainer.style.transform = 'scale(1)';
-                
-                this.visContainer.innerHTML = matches 
-                    ? `<div style="color:var(--accent-success); font-size:3rem; font-weight:bold; animation: pulse 0.5s;">💎💎💎</div>`
-                    : `<div style="color:#666; font-size:3rem; font-weight:bold;">🍒🍋🔔</div>`;
+            // Logic
+            // Win chance 25%? 
+            // 3 matching symbols needed.
+            const symbols = ['🍒', '🍋', '🔔', '💎', '7️⃣'];
+            const isWin = Math.random() < 0.25;
+            let resultSymbols = [];
 
-                const payout = matches ? bet * 5 : 0;
-                if (payout > 0) window.MoonKat.updateBalance(payout);
-
-                const xpGain = Math.floor(Math.max(10, bet * 0.08));
-                window.MoonKat.addXp(xpGain);
-
-                if(window.MoonKat.incrementStat) {
-                    window.MoonKat.incrementStat('gamesPlayed');
-                    window.MoonKat.incrementStat('totalBets');
-                    if(result.win) {
-                        window.MoonKat.incrementStat('wins');
-                        window.MoonKat.incrementStat('totalWon', payout);
-                    } else {
-                        window.MoonKat.incrementStat('totalLost', bet);
-                    }
+            if(isWin) {
+                const sym = symbols[Math.floor(Math.random() * symbols.length)];
+                resultSymbols = [sym, sym, sym];
+            } else {
+                // Generate non-matching
+                resultSymbols = [
+                    symbols[Math.floor(Math.random() * symbols.length)],
+                    symbols[Math.floor(Math.random() * symbols.length)],
+                    symbols[Math.floor(Math.random() * symbols.length)]
+                ];
+                // Ensure not matching by accident (simple check)
+                if(resultSymbols[0] === resultSymbols[1] && resultSymbols[1] === resultSymbols[2]) {
+                     resultSymbols[2] = symbols[(symbols.indexOf(resultSymbols[2]) + 1) % symbols.length];
                 }
+            }
 
-                this.log.innerHTML = `${result.message} ${result.win ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
-                this.playBtn.disabled = false;
-            }, 1000);
+            // Reveal Animation
+            let revealed = 0;
+            resultSymbols.forEach((sym, i) => {
+                setTimeout(() => {
+                    this.cells[i].innerHTML = sym;
+                    this.cells[i].style.background = '#555';
+                    revealed++;
+                    if(revealed === 3) {
+                        this.finishPlay(bet, isWin);
+                    }
+                }, 400 * (i + 1));
+            });
+        }
+
+        finishPlay(bet, isWin) {
+            const payout = isWin ? bet * 5 : 0;
+            const message = isWin ? "3 Matches! You Won!" : "No Match. Try again.";
+
+            if (payout > 0) this.updateCurrency(payout);
+
+            const xpGain = Math.floor(Math.max(10, bet * 0.1));
+            window.MoonKat.addXp(xpGain);
+
+            if(window.MoonKat.state.user.stats) {
+                window.MoonKat.state.user.stats.gamesPlayed++;
+                window.MoonKat.state.user.stats.totalBets += bet;
+                if(isWin) {
+                    window.MoonKat.state.user.stats.wins = (window.MoonKat.state.user.stats.wins || 0) + 1;
+                    window.MoonKat.state.user.stats.totalWon += payout;
+                } else {
+                    window.MoonKat.state.user.stats.totalLost += bet;
+                }
+            }
+
+            this.log.innerHTML = `${message} ${isWin ? `<span style="color:var(--accent-success)">+${payout.toFixed(2)}</span>` : `<span style="color:var(--accent-danger)">-${bet.toFixed(2)}</span>`} (+${xpGain} XP)`;
+            this.playBtn.disabled = false;
         }
 
         destroy() {

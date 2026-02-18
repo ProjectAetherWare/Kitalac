@@ -43,6 +43,8 @@
             // Safety Checks
             if (!MK.state) MK.state = {};
             if (!MK.state.user) MK.state.user = { balance: 100, inventory: {}, portfolio: {} };
+            if (!MK.state.user.transactions) MK.state.user.transactions = [];
+            if (!MK.state.listings) MK.state.listings = [];
             if (!MK.state.coins) MK.state.coins = [];
             if (!MK.state.stocks) MK.state.stocks = [];
             if (!MK.state.bonds) MK.state.bonds = [];
@@ -371,6 +373,72 @@
         }
     }
 
+    // Asset Listing Bot Logic
+    setInterval(() => {
+        if (!MK.state.listings || MK.state.listings.length === 0) return;
+
+        // Iterate active listings
+        // We use a backwards loop to safely splice
+        for (let i = MK.state.listings.length - 1; i >= 0; i--) {
+            const listing = MK.state.listings[i];
+            
+            // Only bots buy user assets
+            if (Math.random() < 0.3) { // 30% chance to consider buying each tick (every 10s)
+                
+                // Calculate chance based on price difference
+                // Listing Price vs Real Value (from Asset Base or Market Average)
+                // Since listings are unique assets, "real value" is the asset.price (which user might have marked up or down)
+                // Wait, listings are user assets. The asset object stores its "estimated" value in asset.price.
+                // The listing has listing.price (user set).
+                
+                const ratio = listing.price / listing.asset.price;
+                
+                // Formula: If price is same (1.0), chance is high. If price is 2x (2.0), chance drops drastically.
+                // If price is 0.5x, chance is very high.
+                
+                // Base chance 10% per tick adjusted by ratio power
+                // C = 0.1 * (1 / ratio^3)
+                // If ratio 1 (fair): 10%
+                // If ratio 2 (expensive): 0.1 * 0.125 = 1.25%
+                // If ratio 0.5 (cheap): 0.1 * 8 = 80%
+                
+                let chance = 0.1 * Math.pow(1 / ratio, 3);
+                if (chance > 0.9) chance = 0.9; // Cap
+                
+                if (Math.random() < chance) {
+                    // SOLD!
+                    const buyerName = MK.state.bots.length > 0 
+                        ? MK.state.bots[Math.floor(Math.random() * MK.state.bots.length)].name 
+                        : "Rich Bot";
+                        
+                    // Process Transaction
+                    MK.updateBalance(listing.price);
+                    
+                    // Add Transaction
+                    if (!MK.state.user.transactions) MK.state.user.transactions = [];
+                    MK.state.user.transactions.unshift({
+                        type: 'SALE',
+                        item: listing.asset.name,
+                        amount: listing.price,
+                        date: Date.now(),
+                        buyer: buyerName
+                    });
+                    
+                    // Remove Listing
+                    MK.state.listings.splice(i, 1);
+                    
+                    // Notify
+                    if (window.app && window.app.showToast) {
+                        window.app.showToast(`Sold ${listing.asset.name} to ${buyerName} for $${listing.price.toLocaleString()}!`, 'success');
+                    }
+                    
+                    // Refresh Portfolio if open
+                    if (window.app.currentPage === 'portfolio') window.app.goTo('portfolio');
+                }
+            }
+        }
+    }, 5000); // Check every 5 seconds
+
     // Random Asset Generation
     setInterval(() => {
         // More frequent stock/bond generation
@@ -502,65 +570,103 @@
         list.innerHTML = '';
         let totalVal = 0;
         
-        // Use container for centering if list empty
-        if((!MK.state.user.inventory || Object.keys(MK.state.user.inventory).length === 0) && 
-           (!MK.state.user.portfolio || Object.keys(MK.state.user.portfolio).length === 0)) {
-            list.innerHTML = '<div style="text-align:center; padding:50px; color:var(--text-secondary);">Portfolio is empty. Go trade!</div>';
-        }
-
-        const renderItem = (ticker, amount, type) => {
-            let item = type === 'crypto' 
-                ? MK.state.coins.find(c => c.ticker === ticker)
-                : MK.state.stocks.find(s => s.ticker === ticker);
-                
-            if(!item) return;
-            
-            const val = amount * item.price;
-            totalVal += val;
-            
-            const row = document.createElement('div');
-            row.className = 'coin-row';
-            row.onclick = (e) => {
-                if(!e.target.closest('button')) MK.openStockModal(ticker);
-            };
-            row.style.cursor = 'pointer';
-
-            row.innerHTML = `
-                <div style="display:flex; align-items:center; gap:16px;">
-                    <div class="coin-icon" style="color:${getColor(ticker)}; border-color:${getColor(ticker)}">
-                        <i class="fas ${type === 'crypto' ? 'fa-coins' : 'fa-building'}"></i>
-                    </div>
-                    <div>
-                        <span style="font-weight:bold; font-size:1.1rem; display:block;">${item.name}</span>
-                        <span style="color:var(--text-secondary); font-size:0.85rem;">${amount.toFixed(4)} Shares/Tokens</span>
-                    </div>
-                </div>
-                <div></div>
-                <div style="text-align:right; margin-right:24px;">
-                    <span style="font-size:1.1rem; font-weight:bold; display:block;">$${MK.formatCurrency(val)}</span>
-                    <span style="font-size:0.9rem; color:var(--text-secondary)">$${MK.formatCurrency(item.price)} each</span>
-                </div>
-                <div></div>
-                <div style="display:flex; gap:8px; justify-content:flex-end;">
-                     <button class="btn-action btn-buy" onclick="event.stopPropagation(); ${type==='stock' ? `MoonKat.buyStock('${ticker}')` : `MoonKat.buy('${ticker}')`}">Buy</button>
-                     <button class="btn-action btn-sell" onclick="event.stopPropagation(); ${type==='stock' ? `MoonKat.sellStock('${ticker}')` : `MoonKat.sell('${ticker}')`}">Sell</button>
-                </div>
-            `;
-            list.appendChild(row);
-        };
-
-        // Render Crypto
-        if(MK.state.user.inventory) {
-            Object.entries(MK.state.user.inventory).forEach(([t, amt]) => {
-                if(amt > 0.000001) renderItem(t, amt, 'crypto');
-            });
-        }
+        // --- SECTIONS ---
         
-        // Render Stocks
-        if(MK.state.user.portfolio) {
-            Object.entries(MK.state.user.portfolio).forEach(([t, amt]) => {
-                if(amt > 0.000001) renderItem(t, amt, 'stock');
+        // 1. Crypto & Stocks
+        let holdingsHtml = '';
+        const holdings = [];
+        if(MK.state.user.inventory) Object.entries(MK.state.user.inventory).forEach(([t, a]) => { if(a>0.000001) holdings.push({t, a, type:'crypto'}); });
+        if(MK.state.user.portfolio) Object.entries(MK.state.user.portfolio).forEach(([t, a]) => { if(a>0.000001) holdings.push({t, a, type:'stock'}); });
+        
+        if (holdings.length > 0) {
+            holdingsHtml += `<h3 style="margin:20px 0 10px 0;">Holdings</h3>`;
+            holdings.forEach(h => {
+                let item = h.type === 'crypto' ? MK.state.coins.find(c=>c.ticker===h.t) : MK.state.stocks.find(s=>s.ticker===h.t);
+                if(item) {
+                    const val = h.a * item.price;
+                    totalVal += val;
+                    holdingsHtml += `
+                    <div class="coin-row" onclick="MK.openStockModal('${h.t}')" style="cursor:pointer">
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div class="coin-icon"><i class="fas ${h.type==='crypto'?'fa-coins':'fa-building'}"></i></div>
+                            <div><b>${item.name}</b> <span style="color:#888">${h.t}</span></div>
+                        </div>
+                        <div style="text-align:right">
+                            <div>$${MK.formatCurrency(val)}</div>
+                            <div style="font-size:0.8rem;color:#888">${h.a.toFixed(4)} @ $${MK.formatCurrency(item.price)}</div>
+                        </div>
+                    </div>`;
+                }
             });
+        }
+
+        // 2. Assets (Real Estate, etc.)
+        let assetsHtml = '';
+        if (MK.state.user.assets && MK.state.user.assets.length > 0) {
+            assetsHtml += `<h3 style="margin:20px 0 10px 0;">Assets</h3>`;
+            MK.state.user.assets.forEach(asset => {
+                totalVal += asset.price;
+                const typeInfo = MK.ASSET_TYPES[asset.type] || { icon: 'fa-question' };
+                assetsHtml += `
+                <div class="coin-row">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <div class="coin-icon"><i class="fas ${typeInfo.icon}"></i></div>
+                        <div><b>${asset.name}</b> <span style="color:#888">${typeInfo.label}</span></div>
+                    </div>
+                    <div style="text-align:right">
+                        <div>$${asset.price.toLocaleString()}</div>
+                        <button class="btn-sm btn-sell" onclick="MoonKat.sellAsset('${asset.id}')">Sell / List</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // 3. Active Listings
+        let listingsHtml = '';
+        const myListings = (MK.state.listings || []).filter(l => l.seller === 'user');
+        if (myListings.length > 0) {
+            listingsHtml += `<h3 style="margin:20px 0 10px 0;">My Active Listings</h3>`;
+            myListings.forEach(l => {
+                // Listings don't count towards liquid net worth usually, but let's add them or treat as pending
+                // Ideally they are still assets until sold.
+                // totalVal += l.asset.price; 
+                listingsHtml += `
+                <div class="coin-row" style="border-left: 3px solid var(--accent-primary);">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <div class="coin-icon"><i class="fas fa-tag"></i></div>
+                        <div><b>${l.asset.name}</b> <span style="color:#888">Listed for $${l.price.toLocaleString()}</span></div>
+                    </div>
+                    <div style="text-align:right">
+                        <button class="btn-sm" style="background:var(--accent-danger)" onclick="MoonKat.cancelListing('${l.id}')">Cancel</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // 4. Transaction History
+        let historyHtml = '';
+        if (MK.state.user.transactions && MK.state.user.transactions.length > 0) {
+            historyHtml += `<h3 style="margin:20px 0 10px 0;">Transaction History</h3>`;
+            historyHtml += `<div style="max-height:300px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px;">`;
+            MK.state.user.transactions.slice(0, 20).forEach(tx => {
+                let color = tx.type === 'SALE' || tx.type === 'QUICK_SELL' ? 'var(--accent-success)' : '#fff';
+                let sign = tx.type === 'SALE' || tx.type === 'QUICK_SELL' ? '+' : '';
+                historyHtml += `
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0; font-size:0.9rem;">
+                    <div>
+                        <span style="color:#aaa; font-size:0.8rem; margin-right:8px;">${new Date(tx.date).toLocaleTimeString()}</span>
+                        <b>${tx.type}</b>: ${tx.item} ${tx.buyer ? `<span style="color:#888">to ${tx.buyer}</span>` : ''}
+                    </div>
+                    <div style="color:${color}">${sign}$${tx.amount.toLocaleString()}</div>
+                </div>`;
+            });
+            historyHtml += `</div>`;
+        }
+
+        if (!holdingsHtml && !assetsHtml && !listingsHtml && !historyHtml) {
+            list.innerHTML = '<div style="text-align:center; padding:50px; color:var(--text-secondary);">Portfolio is empty. Go trade!</div>';
+        } else {
+            list.innerHTML = holdingsHtml + assetsHtml + listingsHtml + historyHtml;
         }
         
         // Update Stats
